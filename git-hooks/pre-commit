@@ -1,0 +1,11 @@
+#!/bin/bash
+
+flake8 . > /tmp/flake8.log || {
+    echo "flake8 failed, fix your code! Logs can be found in /tmp/flake8.log"
+    exit 1
+}
+
+python -m unittest discover tests/ || {
+    echo "Unit tests failed, fix the errors!"
+    exit 1
+}

@@ -5,7 +5,7 @@ with open('LICENSE') as fh:
     license = fh.read()
 
 with open('README.md') as fh:
-    readme = rh.read()
+    readme = fh.read()
 
 setup(
     name='cloudimg',
