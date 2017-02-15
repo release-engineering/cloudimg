@@ -9,7 +9,7 @@ setup(
                  'environments'),
     license='GPLv3',
     url='https://gitlab.cee.redhat.com/rad/cloud-image',
-    packages=find_packages(exclude=('tests', 'bin', 'docs')),
+    packages=find_packages(),
     install_requires=[
         'apache-libcloud>=1.5.0',
         'requests',
