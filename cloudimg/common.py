@@ -72,34 +72,87 @@ class BaseService(object):
         # Default chunk size for streaming images from a remote URL; 4MB
         self.chunk_size = 4 * 1024 * 1024
 
-    def upload(self, image, name=None):
+    def get_image(self, metadata):
         """
-        Uploads an image with a given optional name.
+        Finds an image associated with some publishing metadata.
 
         Args:
-            image (str): A file path or URL to the image
-            name (str, optional): An alternative name for the destination image
-        """
-        raise NotImplementedError('upload() must be implemented by subclasses')
+            metadata: metadata about the disk image and how it should be
+                      published
 
-    def upload_to_container(self, image, container_name, name=None):
+        Returns:
+            A libcloud compute Image object if found; None otherwise
+        """
+        for image in self.compute.list_images(ex_owner='self'):
+            if image.name == metadata.image_name:
+                return image
+        return None
+
+    def get_object(self, metadata):
+        """
+        Finds a storage object associated with some publishing metadata.
+
+        Args:
+            metadata: metadata about the disk image and how it should be
+                      published
+
+        Returns:
+            A libcloud storage Object if found; None otherwise
+        """
+        try:
+            return self.storage.get_object(metadata.container,
+                                           metadata.object_name)
+        except ObjectDoesNotExistError:
+            return None
+
+    def get_snapshot(self, metadata):
+        """
+        Finds a snapshot associated with some publishing metadata.
+
+        Args:
+            metadata: metadata about the disk image and how it should be
+                      published
+
+        Returns:
+            A libcloud compute VolumeSnapshot object if found; None otherwise
+        """
+        for snapshot in self.compute.list_snapshots(owner='self'):
+            if snapshot.name == metadata.snapshot_name:
+                return snapshot
+        return None
+
+    def publish(self, metadata):
+        """
+        Takes some metadata about a disk image, imports it into the cloud
+        service and makes it available to others.
+
+        Args:
+            metadata: metadata about the disk image and how it should be
+                      published
+
+        Returns:
+            A libcloud compute Image object
+        """
+        raise NotImplementedError('publish() must be implemented')
+
+    def upload_to_container(self, metadata):
         """
         Uploads an image to a storage container. If the image is a remote URL,
         it will be requested using chunk sizes determined by `self.chunk_size`.
 
         Args:
-            image (str): A file path or URL to the image
-            container_name (str): The name of the storage container
-            name (str, optional): An override name for the destination image.
-                By default, the original filename will be used.
+            metadata: metadata about the disk image and how it should be
+                      published
+
+        Returns:
+            A ``libcloud.storage.base.Object`` object
         """
-        log.info('Uploading %s to container %s', image, container_name)
+        image_path = metadata.image_path
+        container_name = metadata.container
+        obj_name = metadata.object_name
 
-        # Override the upload name if desired
-        if not name:
-            name = os.path.basename(image)
-
-        log.info('Uploading %s with name %s', image, name)
+        log.info('Uploading %s to container %s', image_path, container_name)
+        log.info('Uploading %s with name %s', image_path, obj_name)
 
         # Get or create the container
         try:
@@ -108,15 +161,19 @@ class BaseService(object):
             log.info('Creating container: %s', container_name)
             container = self.storage.create_container(container_name)
 
-        if image.lower().startswith('http'):
+        if image_path.lower().startswith('http'):
             # Stream the upload from a remote URL
-            log.info('Opening stream to: %s', image)
-            resp = requests.get(image, stream=True)
+            log.info('Opening stream to: %s', image_path)
+            resp = requests.get(image_path, stream=True)
             resp.raise_for_status()
             stream = resp.iter_content(self.chunk_size)
-            self.storage.upload_object_via_stream(stream, container, name)
+            obj = self.storage.upload_object_via_stream(stream,
+                                                        container,
+                                                        obj_name)
         else:
             # Upload a local file
-            self.storage.upload_object(image, container, name)
+            obj = self.storage.upload_object(image_path, container, obj_name)
 
-        log.info('Successfully uploaded %s', image)
+        log.info('Successfully uploaded %s', image_path)
+
+        return obj
