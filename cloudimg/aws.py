@@ -6,9 +6,28 @@ from libcloud.storage.providers import get_driver as get_storage_driver
 from libcloud.compute.types import Provider as ComputeProvider
 from libcloud.storage.types import Provider as StorageProvider
 
-from cloudimg.common import BaseService
+from cloudimg.common import BaseService, PublishingMetadata
 
 log = logging.getLogger(__name__)
+
+
+class AWSPublishingMetadata(PublishingMetadata):
+    """
+    A collection of metadata necessary for uploading and publishing a disk
+    image to AWS.
+
+    Args:
+        ena_support (bool, optional): Enables enhanced network adapters
+        billing_products (list, optional): Billing product identifiers
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.ena_support = kwargs.pop('ena_support', None)
+        self.billing_products = kwargs.pop('billing_products', None)
+
+        super(AWSPublishingMetadata, self).__init__(*args, **kwargs)
+
+        assert self.container, 'A container must be defined'
 
 
 class AWSService(BaseService):
