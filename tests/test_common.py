@@ -32,24 +32,27 @@ class TestBaseService(unittest.TestCase):
         """
         self.storage.get_container.side_effect = \
             ContainerDoesNotExistError(None, None, None)
-        self.basesvc.upload_to_container(self.metadata)
+        with patch('cloudimg.common.open'):
+            self.basesvc.upload_to_container(self.metadata)
         self.storage.create_container.assert_called_once_with(
             self.container.name)
 
-    def test_upload_to_container_default_name(self):
-        """
-        Test that upload_object is called with the proper args and a default
-        name for the image.
-        """
-        self.basesvc.upload_to_container(self.metadata)
-        self.storage.upload_object.assert_called_once_with(
-            self.metadata.image_path, self.container, 'image.raw')
-
-    @patch('cloudimg.common.requests')
-    def test_upload_to_container_default_name_for_url(self, mock_requests):
+    @patch('cloudimg.common.open')
+    def test_upload_to_container_local_image(self, mock_open):
         """
         Test that upload_object_via_stream is called with the proper args and a
-        default name for the image.
+        default name for a local image.
+        """
+        self.basesvc.upload_to_container(self.metadata)
+        stream = mock_open.return_value.__enter__.return_value
+        self.storage.upload_object_via_stream.assert_called_once_with(
+            stream, self.container, 'image.raw')
+
+    @patch('cloudimg.common.requests')
+    def test_upload_to_container_remote_image(self, mock_requests):
+        """
+        Test that upload_object_via_stream is called with the proper args and a
+        default name for a remote image.
         """
         stream = MagicMock()
         mock_requests.get.return_value.iter_content.return_value = stream
@@ -74,7 +77,7 @@ class TestBaseService(unittest.TestCase):
         image = MagicMock()
         image.name = 'image123'
         self.compute.list_images.return_value = [image]
-        self.assertIsNone(self.basesvc.get_image(self.metadata))
+        self.assertEqual(self.basesvc.get_image(self.metadata), None)
 
     def test_get_object(self):
         """
@@ -90,7 +93,7 @@ class TestBaseService(unittest.TestCase):
         """
         self.storage.get_object.side_effect = \
             ObjectDoesNotExistError(None, None, None)
-        self.assertIsNone(self.basesvc.get_object(self.metadata))
+        self.assertEqual(self.basesvc.get_object(self.metadata), None)
 
     def test_get_snapshot(self):
         """
@@ -108,7 +111,7 @@ class TestBaseService(unittest.TestCase):
         snapshot = MagicMock()
         snapshot.name = 'snapshot123'
         self.compute.list_snapshots.return_value = [snapshot]
-        self.assertIsNone(self.basesvc.get_snapshot(self.metadata))
+        self.assertEqual(self.basesvc.get_snapshot(self.metadata), None)
 
 if __name__ == '__main__':
     unittest.main()
