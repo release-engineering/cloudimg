@@ -2,7 +2,12 @@ import unittest
 
 from mock import MagicMock, patch
 
-from cloudimg.common import BaseService, ContainerDoesNotExistError
+from cloudimg.common import (
+    BaseService,
+    ContainerDoesNotExistError,
+    ObjectDoesNotExistError,
+    PublishingMetadata
+)
 
 
 class TestBaseService(unittest.TestCase):
@@ -12,11 +17,14 @@ class TestBaseService(unittest.TestCase):
         self.compute = MagicMock()
         self.basesvc = BaseService(self.storage, self.compute)
 
-        self.image_path = '/some/fake/path/to/image.raw'
-        self.image_url = 'http:///some.fake.url/to/image.raw'
-
         self.container = MagicMock(name='fakecontainername')
         self.storage.get_container.return_value = self.container
+
+        self.metadata = PublishingMetadata(
+            image_path='/some/fake/path/to/image.raw',
+            image_name='fakeimagename',
+            container=self.container.name
+        )
 
     def test_upload_to_container_create_container(self):
         """
@@ -24,7 +32,7 @@ class TestBaseService(unittest.TestCase):
         """
         self.storage.get_container.side_effect = \
             ContainerDoesNotExistError(None, None, None)
-        self.basesvc.upload_to_container(self.image_path, self.container.name)
+        self.basesvc.upload_to_container(self.metadata)
         self.storage.create_container.assert_called_once_with(
             self.container.name)
 
@@ -33,23 +41,9 @@ class TestBaseService(unittest.TestCase):
         Test that upload_object is called with the proper args and a default
         name for the image.
         """
-        self.basesvc.upload_to_container(self.image_path, self.container.name)
-        self.storage.upload_object.assert_called_once_with(self.image_path,
-                                                           self.container,
-                                                           'image.raw')
-
-    def test_upload_to_container_name_override(self):
-        """
-        Test that upload_object is called with the proper args and an override
-        name for the image.
-        """
-        name = 'new-image-name'
-        self.basesvc.upload_to_container(self.image_path,
-                                         self.container.name,
-                                         name=name)
-        self.storage.upload_object.assert_called_once_with(self.image_path,
-                                                           self.container,
-                                                           name)
+        self.basesvc.upload_to_container(self.metadata)
+        self.storage.upload_object.assert_called_once_with(
+            self.metadata.image_path, self.container, 'image.raw')
 
     @patch('cloudimg.common.requests')
     def test_upload_to_container_default_name_for_url(self, mock_requests):
@@ -59,24 +53,62 @@ class TestBaseService(unittest.TestCase):
         """
         stream = MagicMock()
         mock_requests.get.return_value.iter_content.return_value = stream
-        self.basesvc.upload_to_container(self.image_url, self.container.name)
+        self.metadata.image_path = 'http:///some.fake.url/to/image.raw'
+        self.basesvc.upload_to_container(self.metadata)
         self.storage.upload_object_via_stream.assert_called_once_with(
             stream, self.container, 'image.raw')
 
-    @patch('cloudimg.common.requests')
-    def test_upload_to_container_name_override_for_url(self, mock_requests):
+    def test_get_image(self):
         """
-        Test that upload_object_via_stream is called with the proper args and
-        override name for the image.
+        Test that a get_image returns an image if found.
         """
-        name = 'new-image-name'
-        stream = MagicMock()
-        mock_requests.get.return_value.iter_content.return_value = stream
-        self.basesvc.upload_to_container(self.image_url,
-                                         self.container.name,
-                                         name=name)
-        self.storage.upload_object_via_stream.assert_called_once_with(
-            stream, self.container, name)
+        image = MagicMock()
+        image.name = self.metadata.image_name
+        self.compute.list_images.return_value = [image]
+        self.assertEqual(self.basesvc.get_image(self.metadata), image)
+
+    def test_get_image_not_found(self):
+        """
+        Test that get_image returns None when an image is not found.
+        """
+        image = MagicMock()
+        image.name = 'image123'
+        self.compute.list_images.return_value = [image]
+        self.assertIsNone(self.basesvc.get_image(self.metadata))
+
+    def test_get_object(self):
+        """
+        Test that a get_object returns an object if found.
+        """
+        obj = MagicMock()
+        self.storage.get_object.return_value = obj
+        self.assertEqual(self.basesvc.get_object(self.metadata), obj)
+
+    def test_get_object_not_found(self):
+        """
+        Test that get_object returns None when an object is not found.
+        """
+        self.storage.get_object.side_effect = \
+            ObjectDoesNotExistError(None, None, None)
+        self.assertIsNone(self.basesvc.get_object(self.metadata))
+
+    def test_get_snapshot(self):
+        """
+        Test that a get_snapshot returns a snapshot if found.
+        """
+        snapshot = MagicMock()
+        snapshot.name = self.metadata.snapshot_name
+        self.compute.list_snapshots.return_value = [snapshot]
+        self.assertEqual(self.basesvc.get_snapshot(self.metadata), snapshot)
+
+    def test_get_snapshot_not_found(self):
+        """
+        Test that get_snapshot returns None when a snapshot is not found.
+        """
+        snapshot = MagicMock()
+        snapshot.name = 'snapshot123'
+        self.compute.list_snapshots.return_value = [snapshot]
+        self.assertIsNone(self.basesvc.get_snapshot(self.metadata))
 
 if __name__ == '__main__':
     unittest.main()
