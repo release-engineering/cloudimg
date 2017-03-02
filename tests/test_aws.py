@@ -11,11 +11,10 @@ class TestAWSPublishingMetadata(unittest.TestCase):
         """
         Test that container must be defined in the metadata.
         """
-        with self.assertRaises(AssertionError):
-            AWSPublishingMetadata(
-                image_path='/some/fake/path/to/image.raw',
-                image_name='fakeimagename'
-            )
+        self.assertRaises(AssertionError,
+                          AWSPublishingMetadata,
+                          image_path='/some/fake/path/to/image.raw',
+                          image_name='fakeimagename')
 
 
 class TestAWSService(unittest.TestCase):
