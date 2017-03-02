@@ -171,8 +171,12 @@ class BaseService(object):
                                                         container,
                                                         obj_name)
         else:
-            # Upload a local file
-            obj = self.storage.upload_object(image_path, container, obj_name)
+            # We must upload as a stream to support multipart uploads for some
+            # large files and/or providers (e.g. AWS)
+            with open(image_path, 'rb') as stream:
+                obj = self.storage.upload_object_via_stream(stream,
+                                                            container,
+                                                            obj_name)
 
         log.info('Successfully uploaded %s', image_path)
 
