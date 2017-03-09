@@ -102,7 +102,7 @@ class BaseService(object):
         try:
             return self.storage.get_object(metadata.container,
                                            metadata.object_name)
-        except ObjectDoesNotExistError:
+        except (ContainerDoesNotExistError, ObjectDoesNotExistError):
             return None
 
     def get_snapshot(self, metadata):
