@@ -9,6 +9,25 @@ from cloudimg.common import BaseService, PublishingMetadata
 
 log = logging.getLogger(__name__)
 
+S3_REGION_PROVIDERS = {
+    'us-east-1': StorageProvider.S3,
+    'us-east-2': StorageProvider.S3_US_EAST2,
+    'us-west-1': StorageProvider.S3_US_WEST,
+    'us-west-2': StorageProvider.S3_US_WEST_OREGON,
+    'us-gov-west-1': StorageProvider.S3_US_GOV_WEST,
+    'ca-central-1': StorageProvider.S3_CA_CENTRAL,
+    'sa-east-1': StorageProvider.S3_SA_EAST,
+    'eu-west-1': StorageProvider.S3_EU_WEST,
+    'eu-west-2': StorageProvider.S3_EU_WEST2,
+    'eu-central-1': StorageProvider.S3_EU_CENTRAL,
+    'ap-south-1': StorageProvider.S3_AP_SOUTH,
+    'ap-northeast-1': StorageProvider.S3_AP_NORTHEAST,
+    'ap-northeast-2': StorageProvider.S3_AP_NORTHEAST2,
+    'ap-southeast-1': StorageProvider.S3_AP_SOUTHEAST,
+    'ap-southeast-2': StorageProvider.S3_AP_SOUTHEAST2,
+    'cn-north-1': StorageProvider.S3_CN_NORTH,
+}
+
 
 class AWSPublishingMetadata(PublishingMetadata):
     """
@@ -42,11 +61,14 @@ class AWSService(BaseService):
 
     def __init__(self, access_id, secret_key, region='us-east-1',
                  import_role=None):
-        StorageDriver = get_storage_driver(StorageProvider.S3)
+        s3_provider = S3_REGION_PROVIDERS.get(region)
+        if not s3_provider:
+            raise ValueError('Unknown region: %s' % region)
+        StorageDriver = get_storage_driver(s3_provider)
         storage = StorageDriver(access_id, secret_key)
 
         ComputeDriver = get_compute_driver(ComputeProvider.EC2)
-        compute = ComputeDriver(access_id, secret_key, region)
+        compute = ComputeDriver(access_id, secret_key, region=region)
 
         self.import_role = import_role
 
