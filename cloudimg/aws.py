@@ -196,6 +196,10 @@ class AWSService(BaseService):
             image: A libcloud image object
             metadata: ``AWSImageMetadata`` object
         """
+        # Do nothing if no accounts or groups are specified
+        if not metadata.accounts and not metadata.groups:
+            return
+
         perms = {}
 
         index = 1
