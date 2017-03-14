@@ -51,6 +51,19 @@ class TestAWSService(unittest.TestCase):
         self.svc.compute.ex_modify_image_attribute\
             .assert_called_once_with(image, perms)
 
+    def test_share_image_no_op(self):
+        """
+        Test that share_image does nothing if no accounts or groups are
+        specified.
+        """
+        self.metadata.accounts = []
+        self.metadata.groups = []
+
+        image = MagicMock()
+
+        self.svc.share_image(image, self.metadata)
+        self.svc.compute.ex_modify_image_attribute.assert_not_called()
+
     @patch('cloudimg.aws.AWSService.upload_to_container')
     @patch('cloudimg.aws.AWSService.import_snapshot')
     @patch('cloudimg.aws.AWSService.register_image')
