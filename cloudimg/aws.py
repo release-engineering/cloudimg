@@ -40,7 +40,8 @@ class AWSPublishingMetadata(PublishingMetadata):
     """
 
     def __init__(self, *args, **kwargs):
-        self.ena_support = kwargs.pop('ena_support', None)
+        self.ena_support = kwargs.pop('ena_support', True)
+        self.sriov_net_support = kwargs.pop('sriov_net_support', True)
         self.billing_products = kwargs.pop('billing_products', None)
 
         super(AWSPublishingMetadata, self).__init__(*args, **kwargs)
@@ -186,6 +187,7 @@ class AWSService(BaseService):
             root_device_name=metadata.root_device_name,
             block_device_mapping=block_device_mapping,
             ena_support=metadata.ena_support,
+            sriov_net_support=metadata.sriov_net_support,
             billing_products=metadata.billing_products)
 
     def share_image(self, image, metadata):
