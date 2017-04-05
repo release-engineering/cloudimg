@@ -35,13 +35,18 @@ class AWSPublishingMetadata(PublishingMetadata):
     image to AWS.
 
     Args:
-        ena_support (bool, optional): Enables enhanced network adapters
+        ena_support (bool, optional): Enables enhanced network adapters. By
+                                      default this option is enabled.
+        sriov_net_support (str, optional): Set to 'simple' to enable enhanced
+                                           network adapters for Intel 82599 VF
+                                           interfaces. By default this option
+                                           is enabled.
         billing_products (list, optional): Billing product identifiers
     """
 
     def __init__(self, *args, **kwargs):
         self.ena_support = kwargs.pop('ena_support', True)
-        self.sriov_net_support = kwargs.pop('sriov_net_support', True)
+        self.sriov_net_support = kwargs.pop('sriov_net_support', 'simple')
         self.billing_products = kwargs.pop('billing_products', None)
 
         super(AWSPublishingMetadata, self).__init__(*args, **kwargs)
