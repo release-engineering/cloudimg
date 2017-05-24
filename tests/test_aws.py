@@ -1,6 +1,7 @@
 import unittest
 
 from mock import MagicMock, patch
+from libcloud.storage.drivers import s3
 
 from cloudimg.aws import AWSService, AWSPublishingMetadata
 
@@ -19,6 +20,25 @@ class TestAWSPublishingMetadata(unittest.TestCase):
 
 class TestAWSService(unittest.TestCase):
 
+    REGIONS_TO_S3_DRIVERS = {
+        'us-east-1': s3.S3StorageDriver,
+        'us-east-2': s3.S3USEast2StorageDriver,
+        'us-west-1': s3.S3USWestStorageDriver,
+        'us-west-2': s3.S3USWestOregonStorageDriver,
+        'us-gov-west-1': s3.S3USGovWestStorageDriver,
+        'ca-central-1': s3.S3CACentralStorageDriver,
+        'sa-east-1': s3.S3SAEastStorageDriver,
+        'eu-west-1': s3.S3EUWestStorageDriver,
+        'eu-west-2': s3.S3EUWest2StorageDriver,
+        'eu-central-1': s3.S3EUCentralStorageDriver,
+        'ap-south-1': s3.S3APSouthStorageDriver,
+        'ap-northeast-1': s3.S3APNE1StorageDriver,
+        'ap-northeast-2': s3.S3APNE2StorageDriver,
+        'ap-southeast-1': s3.S3APSEStorageDriver,
+        'ap-southeast-2': s3.S3APSE2StorageDriver,
+        'cn-north-1': s3.S3CNNorthStorageDriver,
+    }
+
     def setUp(self):
         self.svc = AWSService('fakeaccessid', 'fakesecretkey')
         self.svc.storage = MagicMock()
@@ -29,6 +49,22 @@ class TestAWSService(unittest.TestCase):
             image_name='fakeimagename',
             container='fakecontainername'
         )
+
+    def test_find_storage_driver_by_region(self):
+        """
+        Test that the storage driver can be acquired given the region name.
+        """
+        for region, driver in self.REGIONS_TO_S3_DRIVERS.items():
+            found = self.svc._storage_driver_from_region(region)
+            self.assertEqual(driver, found)
+
+    def test_cannot_find_storage_driver_by_region(self):
+        """
+        Test that the storage driver cannot be acquired given a bad region
+        name.
+        """
+        self.assertRaises(ValueError, self.svc._storage_driver_from_region,
+                          'us-east-never-to-be-found')
 
     def test_share_image(self):
         """
