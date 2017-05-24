@@ -9,25 +9,6 @@ from cloudimg.common import BaseService, PublishingMetadata
 
 log = logging.getLogger(__name__)
 
-S3_REGION_PROVIDERS = {
-    'us-east-1': StorageProvider.S3,
-    'us-east-2': StorageProvider.S3_US_EAST2,
-    'us-west-1': StorageProvider.S3_US_WEST,
-    'us-west-2': StorageProvider.S3_US_WEST_OREGON,
-    'us-gov-west-1': StorageProvider.S3_US_GOV_WEST,
-    'ca-central-1': StorageProvider.S3_CA_CENTRAL,
-    'sa-east-1': StorageProvider.S3_SA_EAST,
-    'eu-west-1': StorageProvider.S3_EU_WEST,
-    'eu-west-2': StorageProvider.S3_EU_WEST2,
-    'eu-central-1': StorageProvider.S3_EU_CENTRAL,
-    'ap-south-1': StorageProvider.S3_AP_SOUTH,
-    'ap-northeast-1': StorageProvider.S3_AP_NORTHEAST,
-    'ap-northeast-2': StorageProvider.S3_AP_NORTHEAST2,
-    'ap-southeast-1': StorageProvider.S3_AP_SOUTHEAST,
-    'ap-southeast-2': StorageProvider.S3_AP_SOUTHEAST2,
-    'cn-north-1': StorageProvider.S3_CN_NORTH,
-}
-
 
 class AWSPublishingMetadata(PublishingMetadata):
     """
@@ -67,10 +48,7 @@ class AWSService(BaseService):
 
     def __init__(self, access_id, secret_key, region='us-east-1',
                  import_role=None):
-        s3_provider = S3_REGION_PROVIDERS.get(region)
-        if not s3_provider:
-            raise ValueError('Unknown region: %s' % region)
-        StorageDriver = get_storage_driver(s3_provider)
+        StorageDriver = self._storage_driver_from_region(region)
         storage = StorageDriver(access_id, secret_key)
 
         ComputeDriver = get_compute_driver(ComputeProvider.EC2)
@@ -79,6 +57,26 @@ class AWSService(BaseService):
         self.import_role = import_role
 
         super(AWSService, self).__init__(storage, compute)
+
+    def _storage_driver_from_region(self, region):
+        """
+        Searches for a storage driver class matching the region.
+
+        Args:
+            region: The name of the AWS region
+
+        Returns:
+            A storage driver class if found
+        """
+        for provider_name in dir(StorageProvider):
+            if provider_name.startswith('S3'):
+                provider = getattr(StorageProvider, provider_name)
+                StorageDriver = get_storage_driver(provider)
+                if 'Amazon S3' in StorageDriver.name \
+                        and hasattr(StorageDriver, 'region_name') \
+                        and StorageDriver.region_name == region:
+                    return StorageDriver
+        raise ValueError('Cannot find storage driver for region: %s' % region)
 
     def publish(self, metadata):
         """
