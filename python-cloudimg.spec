@@ -15,7 +15,7 @@ Source0:        %{tarball_name}-%{version}.tar.gz
 BuildArch:      noarch
 
 Requires:	python-requests
-Requires:	python-libcloud
+Requires:	python-boto3
 
 BuildRequires:  python-setuptools
 BuildRequires:  python2-devel

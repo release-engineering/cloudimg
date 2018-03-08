@@ -1,3 +1,4 @@
-mock
+mock; python_version <= '2.7'
 nose
-backports.ssl_match_hostname; python_version < '2.7.9'
+flake8<3.0.0; python_version <= '2.6'
+flake8; python_version > '2.6'
