@@ -1,13 +1,27 @@
 import logging
+import time
 
-from libcloud.compute.providers import get_driver as get_compute_driver
-from libcloud.storage.providers import get_driver as get_storage_driver
-from libcloud.compute.types import Provider as ComputeProvider
-from libcloud.storage.types import Provider as StorageProvider
+from boto3.session import Session
+from botocore.exceptions import ClientError
+import requests
 
 from cloudimg.common import BaseService, PublishingMetadata
 
 log = logging.getLogger(__name__)
+
+
+class SnapshotError(Exception):
+    """
+    Raised when a snapshot related error occurs.
+    """
+    pass
+
+
+class SnapshotTimeout(Exception):
+    """
+    Raised when a snapshot related timeout occurs.
+    """
+    pass
 
 
 class AWSPublishingMetadata(PublishingMetadata):
@@ -46,37 +60,194 @@ class AWSService(BaseService):
         import_role (str, optional): AWS IAM role for imports
     """
 
+    # Upload chunk size
+    CHUNK_SIZE = 4 * 1024 * 1024  # 4MB
+
     def __init__(self, access_id, secret_key, region='us-east-1',
                  import_role=None):
-        StorageDriver = self._storage_driver_from_region(region)
-        storage = StorageDriver(access_id, secret_key)
+        self.session = Session(
+            aws_access_key_id=access_id,
+            aws_secret_access_key=secret_key,
+            region_name=region
+        )
 
-        ComputeDriver = get_compute_driver(ComputeProvider.EC2)
-        compute = ComputeDriver(access_id, secret_key, region=region)
+        self.ec2 = self.session.resource('ec2')
+        self.s3 = self.session.resource('s3')
 
         self.import_role = import_role
 
-        super(AWSService, self).__init__(storage, compute)
+        super(AWSService, self).__init__()
 
-    def _storage_driver_from_region(self, region):
+    def get_image_by_name(self, name):
         """
-        Searches for a storage driver class matching the region.
+        Finds an image with a given name.
 
         Args:
-            region: The name of the AWS region
+            name (str): The name of the image
 
         Returns:
-            A storage driver class if found
+            An EC2 Image if found; None otherwise
         """
-        for provider_name in dir(StorageProvider):
-            if provider_name.startswith('S3'):
-                provider = getattr(StorageProvider, provider_name)
-                StorageDriver = get_storage_driver(provider)
-                if 'Amazon S3' in StorageDriver.name \
-                        and hasattr(StorageDriver, 'region_name') \
-                        and StorageDriver.region_name == region:
-                    return StorageDriver
-        raise ValueError('Cannot find storage driver for region: %s' % region)
+        rsp = self.ec2.meta.client.describe_images(
+            Owners=['self'],
+            Filters=[{
+                'Name': 'name',
+                'Values': [name],
+            }],
+        )
+
+        images = rsp['Images']
+
+        if not images:
+            return None
+
+        return self.ec2.Image(images[0]['ImageId'])
+
+    def get_snapshot_by_name(self, name):
+        """
+        Finds a snapshot with a given name.
+
+        Args:
+            name (str): The name of the snapshot
+
+        Returns:
+            An EC2 Snapshot if found; None otherwise
+        """
+        rsp = self.ec2.meta.client.describe_snapshots(
+            OwnerIds=['self'],
+            Filters=[{
+                'Name': 'tag:Name',
+                'Values': [name],
+            }],
+        )
+
+        snapshots = rsp['Snapshots']
+
+        if not snapshots:
+            return None
+
+        return self.ec2.Snapshot(snapshots[0]['SnapshotId'])
+
+    def get_object_by_name(self, container_name, name):
+        """
+        Finds an object with a given name.
+
+        Args:
+            container_name (str): The name of the container to search in
+            name (str): The name of the object
+
+        Returns:
+            An S3 Object if found; None otherwise
+        """
+        obj = self.s3.Object(container_name, name)
+        try:
+            obj.load()
+        except ClientError as error:
+            if int(error.response['Error']['Code']) == 404:
+                return None
+            raise
+
+        return obj
+
+    def get_container_by_name(self, name):
+        """
+        Finds a container with a given name.
+
+        Args:
+            name (str): The name of the container
+
+        Returns:
+            An S3 Bucket if found; None otherwise
+        """
+        try:
+            # Calling load() on a bucket does not raise errors. Instead, the
+            # recommended way from the docs is to perform a HEAD operation.
+            self.s3.meta.client.head_bucket(Bucket=name)
+        except ClientError as error:
+            if int(error.response['Error']['Code']) == 404:
+                return None
+            raise
+
+        return self.s3.Bucket(name)
+
+    def create_container(self, name):
+        """
+        Creates a container with a given name
+
+        Args:
+            name (str): The name of the container
+
+        Returns:
+            An S3 Bucket if found; None otherwise
+        """
+        log.info('Creating container: %s', name)
+        container = self.s3.Bucket(name)
+
+        kwargs = {}
+        region = self.session.region_name
+
+        # The us-east-1 region raises errors if used in the constraint
+        # https://github.com/boto/boto3/issues/125
+        if region != 'us-east-1':
+            kwargs['CreateBucketConfiguration'] = {
+                'LocationConstraint': region
+            }
+
+        container.create(**kwargs)
+
+        return container
+
+    def upload_callback(self, bytes_):
+        """
+        Callback for the upload process.
+
+        Args:
+            bytes_ (int): Total number of bytes transferred
+        """
+        log.info('Bytes uploaded: %s', bytes_)
+
+    def upload_to_container(self, image_path, container_name, object_name,
+                            chunk_size=CHUNK_SIZE):
+        """
+        Uploads an image to a storage container. If the image is a remote URL,
+        it will be streamed in chunks.
+
+        Args:
+            image_path (str): Local or remote HTTP path to the source image
+            container_name (str): The container to upload to
+            object_name (str): The uploaded file name
+            chunk_size (int, optional): Size for HTTP stream chunks
+
+        Returns:
+            An S3 Object
+        """
+        log.info('Uploading %s to container %s', image_path, container_name)
+        log.info('Uploading %s with name %s', image_path, object_name)
+
+        # Get or create the container
+        container = self.get_container_by_name(container_name)
+        if not container:
+            container = self.create_container(container_name)
+
+        if image_path.lower().startswith('http'):
+            # Stream the upload from a remote URL
+            log.info('Opening stream to: %s', image_path)
+            resp = requests.get(image_path, stream=True)
+            resp.raise_for_status()
+            stream = resp.iter_content(chunk_size)
+            self.s3.meta.client.upload_fileobj(stream,
+                                               container_name,
+                                               object_name,
+                                               Callback=self.upload_callback)
+        else:
+            self.s3.meta.client.upload_file(image_path,
+                                            container_name,
+                                            object_name,
+                                            Callback=self.upload_callback)
+
+        log.info('Successfully uploaded %s', image_path)
+
+        return self.get_object_by_name(container_name, object_name)
 
     def publish(self, metadata):
         """
@@ -89,87 +260,154 @@ class AWSService(BaseService):
         the upload will be skipped.
 
         Args:
-            metadata: ``AWSImageMetadata`` object
+            metadata (AWSPublishingMetadata): Metadata about the image
 
         Returns:
-            A libcloud compute Image object
+            An EC2 Image
         """
         log.info('Searching for image: %s', metadata.image_name)
-        image = self.get_image(metadata)
+        image = self.get_image_by_name(metadata.image_name)
 
         if not image:
             log.info('Image does not exist: %s', metadata.image_name)
             log.info('Searching for snapshot: %s', metadata.snapshot_name)
-            snapshot = self.get_snapshot(metadata)
+            snapshot = self.get_snapshot_by_name(metadata.snapshot_name)
 
             if not snapshot:
                 log.info('Snapshot does not exist: %s', metadata.snapshot_name)
                 log.info('Searching for object: %s/%s',
                          metadata.container, metadata.object_name)
-                obj = self.get_object(metadata)
+                obj = self.get_object_by_name(metadata.container,
+                                              metadata.object_name)
 
                 if not obj:
                     log.info('Object does not exist: %s', metadata.object_name)
-                    obj = self.upload_to_container(metadata)
+                    obj = self.upload_to_container(metadata.image_path,
+                                                   metadata.container,
+                                                   metadata.object_name)
+                else:
+                    log.info('Object already exists')
 
-                snapshot = self.import_snapshot(obj, metadata)
+                snapshot = self.import_snapshot(obj, metadata.snapshot_name)
+            else:
+                log.info('Snapshot already exists with id: %s', snapshot.id)
 
             image = self.register_image(snapshot, metadata)
+        else:
+            log.info('Image already exists with id: %s', image.id)
 
         # This is an idempotent operation
-        self.share_image(image, metadata)
+        self.share_image(image,
+                         accounts=metadata.accounts,
+                         groups=metadata.groups)
+
+        log.info('Image published: %s', image.id)
 
         return image
 
-    def import_snapshot(self, obj, metadata):
+    def import_snapshot(self, obj, snapshot_name):
         """
         Imports a disk image as a snapshot.
 
         Args:
-            obj: A libcloud storage object
-            metadata: ``AWSImageMetadata`` object
+            obj (Object): An S3 Object to import from
+            snapshot_name (str): The name of the new snapshot
 
         Returns:
-            A libcloud compute VolumeSnapshot object
+            An EC2 Snapshot
         """
-        source = '%s/%s' % (obj.container.name, obj.name)
+        source = '%s/%s' % (obj.bucket_name, obj.key)
         description = 'cloudimg import of %s' % source
 
-        disk_container = [{
+        disk_container = {
             'Description':  description,
             'Format': 'raw',
             'UserBucket': {
-                'S3Bucket': obj.container.name,
-                'S3Key': obj.name,
+                'S3Bucket': obj.bucket_name,
+                'S3Key': obj.key,
             },
-        }]
+        }
+
+        import_args = {
+            'Description': description,
+            'DiskContainer': disk_container,
+        }
+
+        if self.import_role is not None:
+            import_args['RoleName'] = self.import_role
 
         log.info('Importing snapshot from: %s', source)
-        snapshot = self.compute.ex_import_snapshot(
-            description=description,
-            disk_container=disk_container,
-            role_name=self.import_role)
+        task = self.ec2.meta.client.import_snapshot(**import_args)
+        snapshot = self.wait_for_import_snapshot_task(task)
 
         log.info('Tagging snapshot %s with name: %s',
-                 snapshot.id, metadata.snapshot_name)
+                 snapshot.id, snapshot_name)
 
         # Set the name of the snapshot so we may be able to look it up later
-        tags = {'Name': metadata.snapshot_name}
-        if not self.compute.ex_create_tags(snapshot, tags):
-            log.warning('Failed to set snapshot name for %s', snapshot.id)
+        snapshot.create_tags(
+            Tags=[{
+                'Key': 'Name',
+                'Value': snapshot_name,
+            }]
+        )
 
         return snapshot
+
+    def wait_for_import_snapshot_task(self, task, attempts=120, interval=15):
+        """
+        Waits for a snapshot import task to complete.
+
+        Args:
+            task (dict): Import task details
+            attempts (int, optional): Max number of times to poll
+            interval (int, optional): Seconds between polling
+
+        Returns:
+            An EC2 Snapshot
+        """
+        task_id = task['ImportTaskId']
+        snapshot_id = task['SnapshotTaskDetail'].get('SnapshotId')
+
+        log.info('Waiting for import snapshot task with id: %s', task_id)
+
+        queries = 0
+        while snapshot_id is None:
+
+            queries += 1
+            if queries > attempts:
+                raise SnapshotTimeout('Timed out waiting for snapshot import')
+
+            time.sleep(interval)
+
+            rsp = self.ec2.meta.client.describe_import_snapshot_tasks(
+                ImportTaskIds=[task_id]
+            )
+
+            task = rsp['ImportSnapshotTasks'][0]
+            detail = task['SnapshotTaskDetail']
+            status = detail['Status']
+            status_msg = detail.get('StatusMessage', status)
+            snapshot_id = detail.get('SnapshotId')
+            progress = detail.get('Progress', 'N/A')
+
+            log.info('Snapshot import progress: %s%% - %s',
+                     progress, status_msg)
+
+            if status.lower() == 'error':
+                raise SnapshotError(status_msg)
+
+        return self.ec2.Snapshot(snapshot_id)
 
     def register_image(self, snapshot, metadata):
         """
         Registers a snapshot as an image (AMI).
 
         Args:
-            snapshot: A libcloud snapshot object
-            metadata: ``AWSImageMetadata`` object
+            snapshot (Snapshot): The EC2 Snapshot to register from
+            metadata (AWSPublishingMetadata): Metadata about the image
 
         Returns:
-            A libcloud compute Image object
+            An EC2 Image
         """
 
         block_device_mapping = [{
@@ -182,42 +420,38 @@ class AWSService(BaseService):
         }]
 
         log.info('Registering image: %s', metadata.image_name)
-        return self.compute.ex_register_image(
-            metadata.image_name,
-            description=metadata.description,
-            architecture=metadata.arch,
-            virtualization_type=metadata.virt_type,
-            root_device_name=metadata.root_device_name,
-            block_device_mapping=block_device_mapping,
-            ena_support=metadata.ena_support,
-            sriov_net_support=metadata.sriov_net_support,
-            billing_products=metadata.billing_products)
+        return self.ec2.register_image(
+            Name=metadata.image_name,
+            Description=metadata.description,
+            Architecture=metadata.arch,
+            VirtualizationType=metadata.virt_type,
+            RootDeviceName=metadata.root_device_name,
+            BlockDeviceMappings=block_device_mapping,
+            EnaSupport=metadata.ena_support,
+            SriovNetSupport=metadata.sriov_net_support,
+            BillingProducts=metadata.billing_products
+        )
 
-    def share_image(self, image, metadata):
+    def share_image(self, image, accounts=[], groups=[]):
         """
         Shares an image with other user accounts or groups.
 
         Args:
-            image: A libcloud image object
-            metadata: ``AWSImageMetadata`` object
+            image (Image): An EC2 Image
+            accounts (list, optional): Names of accounts to share with
+            groups (list, optional): Names of groups to share with
         """
-        # Do nothing if no accounts or groups are specified
-        if not metadata.accounts and not metadata.groups:
+        if not accounts and not groups:
             return
 
-        perms = {}
+        log.info('Sharing %s with accounts: %s', image.name, accounts)
+        log.info('Sharing %s with groups: %s', image.name, groups)
 
-        index = 1
-        for user_id in metadata.accounts:
-            perms['LaunchPermission.Add.%s.UserId' % index] = user_id
-            index += 1
+        attrs = {
+            'LaunchPermission': {
+                'Add': [{'UserId': u} for u in accounts] +
+                       [{'Group': g} for g in groups]
+            }
+        }
 
-        for group in metadata.groups:
-            perms['LaunchPermission.Add.%s.Group' % index] = group
-            index += 1
-
-        log.info('Sharing %s with accounts: %s',
-                 metadata.image_name, metadata.accounts)
-        log.info('Sharing %s with groups: %s',
-                 metadata.image_name, metadata.groups)
-        self.compute.ex_modify_image_attribute(image, perms)
+        image.modify_attribute(**attrs)

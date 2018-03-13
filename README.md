@@ -3,11 +3,21 @@ A library for uploading and publishing disk images on various clouds
 
 ## Installation
 
-`python setup.py install`
+```python setup.py install`
 
 ## Development
 
-`python setup.py develop`
+It's best to develop with python 2.6 since that is the minimum supported
+version and tends to have the most restrictive features.
+
+```
+# Setup a virtual environment
+virtualenv -p python2.6 venv
+source venv/bin/activate
+
+# Install the package for development
+python setup.py develop
+```
 
 Additionally, run this for test dependencies:
 
@@ -19,6 +29,16 @@ Additionally, run this for test dependencies:
 chmod +x setup-git-hooks.sh
 ./setup-git-hooks.sh
 ```
+
+## Running lint checks
+
+Run either:
+
+`tox -e lint`
+
+OR:
+
+`flake8 cloudimg/ tests/`
 
 ## Running unit tests
 
