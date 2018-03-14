@@ -42,6 +42,9 @@ rm -rf $RPM_BUILD_ROOT
 %{python_sitelib}/*
 
 %changelog
+* Tue Jan 2 2018 Alex Misstear <amisstea@redhat.com> - 0.1.4-2
+- New version of python-libcloud dependency
+
 * Wed May 24 2017 Alex Misstear <amisstea@redhat.com> - 0.1.4-1
 - AWS storage driver determined from region
 
