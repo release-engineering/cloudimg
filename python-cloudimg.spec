@@ -1,7 +1,7 @@
 %{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
 
 Name:           python-cloudimg
-Version:        0.2.0
+Version:        0.2.1
 Release:        1%{?dist}
 Summary:        A library for uploading and publishing disk images on various clouds
 
@@ -40,6 +40,9 @@ rm -rf $RPM_BUILD_ROOT
 %{python_sitelib}/*
 
 %changelog
+* Tue Mar 13 2018 Alex Misstear <amisstea@redhat.com> 0.2.1-1
+- Fix source package name to work with tito (amisstea@redhat.com)
+
 * Tue Mar 13 2018 Alex Misstear <amisstea@redhat.com> 0.2.0-1
 - boto3 now used for AWS
 
