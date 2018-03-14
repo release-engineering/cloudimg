@@ -3,7 +3,7 @@
 %global tarball_name cloudimg
 
 Name:           python-cloudimg
-Version:        0.1.4
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        A library for uploading and publishing disk images on various clouds
 
@@ -42,6 +42,9 @@ rm -rf $RPM_BUILD_ROOT
 %{python_sitelib}/*
 
 %changelog
+* Tue Mar 13 2018 Alex Misstear <amisstea@redhat.com> 0.2.0-1
+- boto3 now used for AWS
+
 * Tue Jan 2 2018 Alex Misstear <amisstea@redhat.com> - 0.1.4-2
 - New version of python-libcloud dependency
 
