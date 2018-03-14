@@ -1,7 +1,5 @@
 %{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
 
-%global tarball_name cloudimg
-
 Name:           python-cloudimg
 Version:        0.2.0
 Release:        1%{?dist}
@@ -10,7 +8,7 @@ Summary:        A library for uploading and publishing disk images on various cl
 Group:          Development/Languages
 License:        GPLv3
 URL:            https://gitlab.cee.redhat.com/rad/cloud-image/
-Source0:        %{tarball_name}-%{version}.tar.gz
+Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
 
@@ -25,7 +23,7 @@ cloudimg is a Python library capable of uploading disk images to various
 cloud providers and publishing/distributing them in different ways.
 
 %prep
-%setup -qn %{tarball_name}-%{version}
+%setup -qn %{name}-%{version}
 
 %build
 %{__python} setup.py build
