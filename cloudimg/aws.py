@@ -268,6 +268,7 @@ class AWSService(BaseService):
             }
 
         container.create(**kwargs)
+        container.wait_until_exists()
 
         return container
 
