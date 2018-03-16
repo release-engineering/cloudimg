@@ -1,7 +1,7 @@
 %{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
 
 Name:           python-cloudimg
-Version:        0.2.2
+Version:        0.2.3
 Release:        1%{?dist}
 Summary:        A library for uploading and publishing disk images on various clouds
 
@@ -40,6 +40,9 @@ rm -rf $RPM_BUILD_ROOT
 %{python_sitelib}/*
 
 %changelog
+* Fri Mar 16 2018 Alex Misstear <amisstea@redhat.com> 0.2.3-1
+- Improved log message for file uploads (amisstea@redhat.com)
+
 * Fri Mar 16 2018 Alex Misstear <amisstea@redhat.com> 0.2.2-1
 - Wait for bucket to exist after creation (amisstea@redhat.com)
 - Improve the upload progress callback (amisstea@redhat.com)
