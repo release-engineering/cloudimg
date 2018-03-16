@@ -138,9 +138,11 @@ class TestAWSService(unittest.TestCase):
         self.mock_bucket.assert_called_once_with(self.md.container)
         self.assertEqual(container, result)
 
+    @patch('cloudimg.aws.UploadProgress')
     @patch('cloudimg.aws.AWSService.get_container_by_name')
     @patch('cloudimg.aws.AWSService.create_container')
-    def test_upload_to_container_create_container(self, mock_create, mock_get):
+    def test_upload_to_container_create_container(self, mock_create, mock_get,
+                                                  mock_callback):
         mock_get.return_value = None
         obj = self.mock_object.return_value = MagicMock()
 
@@ -151,7 +153,8 @@ class TestAWSService(unittest.TestCase):
         mock_create.assert_called_once_with(self.md.container)
         self.assertEqual(obj, result)
 
-    def test_upload_to_container_local_image(self):
+    @patch('cloudimg.aws.UploadProgress')
+    def test_upload_to_container_local_image(self, mock_callback):
         obj = self.mock_object.return_value = MagicMock()
 
         result = self.svc.upload_to_container(self.md.image_path,
@@ -162,8 +165,10 @@ class TestAWSService(unittest.TestCase):
         self.assertEqual(self.mock_upload_fileobj.call_count, 0)
         self.assertEqual(obj, result)
 
+    @patch('cloudimg.aws.UploadProgress')
     @patch('cloudimg.aws.requests')
-    def test_upload_to_container_remote_image(self, mock_requests):
+    def test_upload_to_container_remote_image(self, mock_requests,
+                                              mock_callback):
         obj = self.mock_object.return_value = MagicMock()
         self.md.image_path = 'http:///some.fake.url/to/image.raw'
 

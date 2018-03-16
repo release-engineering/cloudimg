@@ -1,4 +1,6 @@
 import logging
+import os
+import threading
 import time
 
 from boto3.session import Session
@@ -47,6 +49,78 @@ class AWSPublishingMetadata(PublishingMetadata):
         super(AWSPublishingMetadata, self).__init__(*args, **kwargs)
 
         assert self.container, 'A container must be defined'
+
+
+class UploadProgress(object):
+    """
+    Progress callback for file uploads. Can report determinate or indeterminate
+    progress. Expected to be called as a function.
+
+    Ex:
+        callback = UploadProgress(filepath='/some/file')
+        callback(1024)
+        callback(1024)
+        callback(1024)
+        ...
+
+    Args:
+        filepath (str, optional): Path to the file being uploaded. None for
+                                  indeterminate progress.
+        interval (int, optional): Seconds between logging updates
+    """
+
+    def __init__(self, filepath=None, interval=15):
+        if filepath is not None:
+            self._size = os.path.getsize(filepath)
+        else:
+            self._size = None
+
+        self._interval = interval
+
+        # Total bytes uploaded
+        self._seen = 0
+
+        # Time of last log message
+        self._last_log = 0
+
+        # Lock for multithreaded uploads
+        self._lock = threading.Lock()
+
+    @property
+    def determinate(self):
+        """
+        Uploads are determinate if they have a total expected upload size.
+        """
+        return self._size is not None
+
+    @property
+    def done(self):
+        """
+        Only supported for determinate uploads.
+        """
+        assert self.determinate, 'done unsupported for indeterminate uploads'
+        return self._size == self._seen
+
+    def __call__(self, bytes_):
+        with self._lock:
+            self._seen += bytes_
+
+            # Determine if the time lapse since the last log is greater than
+            # the interval.
+            now = time.time()
+            overdue = now - self._last_log >= self._interval
+
+            # Log determinate when overdue or at 100%
+            if self.determinate and (self.done or overdue):
+                percentage = (float(self._seen)/self._size) * 100
+                log.info('Bytes uploaded: %s/%s (%.2f%%)',
+                         self._seen, self._size, percentage)
+                self._last_log = now
+
+            # Log indeterminate only when overdue
+            elif not self.determinate and overdue:
+                log.info('Bytes uploaded: %s', self._seen)
+                self._last_log = now
 
 
 class AWSService(BaseService):
@@ -194,17 +268,9 @@ class AWSService(BaseService):
             }
 
         container.create(**kwargs)
+        container.wait_until_exists()
 
         return container
-
-    def upload_callback(self, bytes_):
-        """
-        Callback for the upload process.
-
-        Args:
-            bytes_ (int): Total number of bytes transferred
-        """
-        log.info('Bytes uploaded: %s', bytes_)
 
     def upload_to_container(self, image_path, container_name, object_name,
                             chunk_size=CHUNK_SIZE):
@@ -238,12 +304,13 @@ class AWSService(BaseService):
             self.s3.meta.client.upload_fileobj(stream,
                                                container_name,
                                                object_name,
-                                               Callback=self.upload_callback)
+                                               Callback=UploadProgress())
         else:
+            callback = UploadProgress(filepath=image_path)
             self.s3.meta.client.upload_file(image_path,
                                             container_name,
                                             object_name,
-                                            Callback=self.upload_callback)
+                                            Callback=callback)
 
         log.info('Successfully uploaded %s', image_path)
 
