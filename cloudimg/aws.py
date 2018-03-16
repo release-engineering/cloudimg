@@ -57,19 +57,25 @@ class UploadProgress(object):
     progress. Expected to be called as a function.
 
     Ex:
-        callback = UploadProgress(filepath='/some/file')
+        callback = UploadProgress('mybucket', 'myfile', filepath='/some/file')
         callback(1024)
         callback(1024)
         callback(1024)
         ...
 
     Args:
+        container_name (str): Name of the container being uploaded to
+        object_name (str): Name of the destination object
         filepath (str, optional): Path to the file being uploaded. None for
                                   indeterminate progress.
         interval (int, optional): Seconds between logging updates
     """
 
-    def __init__(self, filepath=None, interval=15):
+    def __init__(self, container_name, object_name, filepath=None,
+                 interval=15):
+        self.container_name = container_name
+        self.object_name = object_name
+
         if filepath is not None:
             self._size = os.path.getsize(filepath)
         else:
@@ -113,13 +119,15 @@ class UploadProgress(object):
             # Log determinate when overdue or at 100%
             if self.determinate and (self.done or overdue):
                 percentage = (float(self._seen)/self._size) * 100
-                log.info('Bytes uploaded: %s/%s (%.2f%%)',
-                         self._seen, self._size, percentage)
+                log.info('Bytes uploaded (%s/%s): %s/%s (%.2f%%)',
+                         self.container_name, self.object_name, self._seen,
+                         self._size, percentage)
                 self._last_log = now
 
             # Log indeterminate only when overdue
             elif not self.determinate and overdue:
-                log.info('Bytes uploaded: %s', self._seen)
+                log.info('Bytes uploaded (%s/%s): %s', self.container_name,
+                         self.object_name, self._seen)
                 self._last_log = now
 
 
@@ -301,12 +309,14 @@ class AWSService(BaseService):
             resp = requests.get(image_path, stream=True)
             resp.raise_for_status()
             stream = resp.iter_content(chunk_size)
+            callback = UploadProgress(container_name, object_name)
             self.s3.meta.client.upload_fileobj(stream,
                                                container_name,
                                                object_name,
-                                               Callback=UploadProgress())
+                                               Callback=callback)
         else:
-            callback = UploadProgress(filepath=image_path)
+            callback = UploadProgress(container_name, object_name,
+                                      filepath=image_path)
             self.s3.meta.client.upload_file(image_path,
                                             container_name,
                                             object_name,
