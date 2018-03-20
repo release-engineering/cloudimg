@@ -124,7 +124,7 @@ class TestAWSService(unittest.TestCase):
 
     def test_create_container_us_east_1(self):
         container = self.mock_bucket.return_value = MagicMock()
-        result = self.svc.create_container(self.md.container)
+        result = self.svc.create_container(self.md.container, prop_delay=0)
         container.create.assert_called_once_with()
         self.mock_bucket.assert_called_once_with(self.md.container)
         self.assertEqual(container, result)
@@ -132,7 +132,7 @@ class TestAWSService(unittest.TestCase):
     def test_create_container_not_us_east_1(self):
         self.init_service(region='us-east-2')
         container = self.mock_bucket.return_value = MagicMock()
-        result = self.svc.create_container(self.md.container)
+        result = self.svc.create_container(self.md.container, prop_delay=0)
         container.create.assert_called_once_with(
                 CreateBucketConfiguration={'LocationConstraint': 'us-east-2'})
         self.mock_bucket.assert_called_once_with(self.md.container)
