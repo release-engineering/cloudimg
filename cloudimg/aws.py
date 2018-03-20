@@ -252,12 +252,13 @@ class AWSService(BaseService):
 
         return self.s3.Bucket(name)
 
-    def create_container(self, name):
+    def create_container(self, name, prop_delay=60):
         """
         Creates a container with a given name
 
         Args:
             name (str): The name of the container
+            prop_delay (int, optional): Time to wait for propagation to occur
 
         Returns:
             An S3 Bucket if found; None otherwise
@@ -277,6 +278,13 @@ class AWSService(BaseService):
 
         container.create(**kwargs)
         container.wait_until_exists()
+
+        # S3 may take some time to propagate newly created buckets to EC2.
+        # This is generally only a couple seconds but there doesn't seem to be
+        # a supported API approach to handling it.
+        log.info('Waiting %ss for container "%s" to propagate',
+                 prop_delay, name)
+        time.sleep(prop_delay)
 
         return container
 
@@ -322,9 +330,15 @@ class AWSService(BaseService):
                                             object_name,
                                             Callback=callback)
 
+        log.info('Waiting for object to exist: %s/%s',
+                 container_name, object_name)
+
+        obj = self.s3.Object(container_name, object_name)
+        obj.wait_until_exists()
+
         log.info('Successfully uploaded %s', image_path)
 
-        return self.get_object_by_name(container_name, object_name)
+        return obj
 
     def publish(self, metadata):
         """
