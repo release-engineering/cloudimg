@@ -444,7 +444,7 @@ class AWSService(BaseService):
 
         return snapshot
 
-    def wait_for_import_snapshot_task(self, task, attempts=120, interval=15):
+    def wait_for_import_snapshot_task(self, task, attempts=480, interval=15):
         """
         Waits for a snapshot import task to complete.
 
