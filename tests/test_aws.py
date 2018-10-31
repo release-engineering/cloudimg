@@ -245,6 +245,7 @@ class TestAWSService(unittest.TestCase):
 
         task_rsp = deepcopy(task)
         task_rsp['SnapshotTaskDetail']['SnapshotId'] = 'snap-abc123'
+        task_rsp['SnapshotTaskDetail']['Status'] = 'completed'
         tasks_rsp = {'ImportSnapshotTasks': [task_rsp]}
 
         self.mock_describe_import_snapshot_tasks.return_value = tasks_rsp

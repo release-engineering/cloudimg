@@ -457,12 +457,12 @@ class AWSService(BaseService):
             An EC2 Snapshot
         """
         task_id = task['ImportTaskId']
-        snapshot_id = task['SnapshotTaskDetail'].get('SnapshotId')
+        status = ''
 
         log.info('Waiting for import snapshot task with id: %s', task_id)
 
         queries = 0
-        while snapshot_id is None:
+        while status.lower() != 'completed':
 
             queries += 1
             if queries > attempts:
