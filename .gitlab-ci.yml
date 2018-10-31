@@ -1,0 +1,10 @@
+test:
+  image: fedora:latest
+  tags:
+    - docker
+  script:
+    - dnf install -y python3-tox
+    - tox
+  artifacts:
+    paths:
+      - cover/

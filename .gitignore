@@ -2,7 +2,9 @@
 __pycache__/
 .*.swp
 *.egg-info
+.coverage
 .tox/
+cover/
 dist/
 build/
 venv/
