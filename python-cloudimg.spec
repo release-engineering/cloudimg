@@ -1,7 +1,7 @@
 %{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
 
 Name:           python-cloudimg
-Version:        0.2.5
+Version:        0.2.6
 Release:        1%{?dist}
 Summary:        A library for uploading and publishing disk images on various clouds
 
@@ -40,6 +40,10 @@ rm -rf $RPM_BUILD_ROOT
 %{python_sitelib}/*
 
 %changelog
+* Wed Oct 31 2018 Alex Misstear <amisstea@redhat.com> 0.2.6-1
+- Gitlab CI for linting, unit testing and code coverage (amisstea@redhat.com)
+- Wait for completed state when importing snapshots (amisstea@redhat.com)
+
 * Tue Mar 20 2018 Alex Misstear <amisstea@redhat.com> 0.2.5-1
 - Increase import snapshot timeout (amisstea@redhat.com)
 
