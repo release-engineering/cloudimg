@@ -398,5 +398,6 @@ class TestAWSService(unittest.TestCase):
                                                     self.md.container,
                                                     self.md.object_name)
 
+
 if __name__ == '__main__':
     unittest.main()

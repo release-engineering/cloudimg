@@ -1,10 +1,10 @@
 test:
-  image: fedora:latest
+  image: quay.io/redhat-aqe/tox:latest
   tags:
-    - docker
+    - upshift
   script:
-    - dnf install -y python3-tox
     - tox
+  coverage: '/TOTAL.*\s+(\d+)%/'
   artifacts:
     paths:
       - cover/
