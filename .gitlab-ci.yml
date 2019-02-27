@@ -5,6 +5,7 @@ test:
   script:
     - dnf install -y python3-tox
     - tox
+  coverage: '/TOTAL.*\s+(\d+)%/'
   artifacts:
     paths:
       - cover/
