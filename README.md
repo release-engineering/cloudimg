@@ -3,7 +3,7 @@ A library for uploading and publishing disk images on various clouds
 
 ## Installation
 
-```python setup.py install`
+```python setup.py install```
 
 ## Development
 
@@ -23,13 +23,6 @@ Additionally, run this for test dependencies:
 
 `pip install -r requirements-test.txt`
 
-### Git hooks
-
-```
-chmod +x setup-git-hooks.sh
-./setup-git-hooks.sh
-```
-
 ## Running lint checks
 
 Run either:
@@ -47,14 +40,17 @@ python interpreters.
 
 ### Manual execution
 
-`nosetests tests/`
+`py.test`
 
 ### Execution with tox
 
 Prior to using tox, ensure you have installed all the supported versions of
-python on your system:
-	2.6, 2.7, 3.3, 3.4 and 3.5
+python on your system (check tox.ini).
 
 After that, simply run:
 
 `tox`
+
+### License
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
