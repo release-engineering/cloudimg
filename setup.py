@@ -8,7 +8,7 @@ setup(
     description=('Services for building and releasing products in cloud '
                  'environments'),
     license='GPLv3',
-    url='https://gitlab.cee.redhat.com/rad/cloud-image',
+    url='https://github.com/release-engineering/cloudimg',
     packages=find_packages(),
     install_requires=[
         'boto3==1.4.6',

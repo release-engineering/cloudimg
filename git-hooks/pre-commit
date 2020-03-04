@@ -1,6 +1,0 @@
-#!/bin/bash
-
-tox || {
-    echo "Tests failed, fix the errors!"
-    exit 1
-}
