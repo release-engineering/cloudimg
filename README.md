@@ -1,6 +1,9 @@
 # cloudimg
 A library for uploading and publishing disk images on various clouds
 
+[![Build Status](https://travis-ci.org/release-engineering/cloudimg.svg?branch=master)](https://travis-ci.org/release-engineering/cloudimg)
+[![Coverage Status](https://coveralls.io/repos/github/release-engineering/cloudimg/badge.svg?branch=master)](https://coveralls.io/github/release-engineering/cloudimg?branch=master)
+
 ## Installation
 
 ```python setup.py install```
