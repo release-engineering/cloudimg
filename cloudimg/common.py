@@ -12,6 +12,8 @@ class PublishingMetadata(object):
     Args:
         image_path (str): A file path or URL to the image
         image_name (str): The name of the image. Used as a primary identifier.
+        snapshot_name (str): The name of the snapshot. Derived from the image
+                             filename by default.
         description (str, optional): The description of the image
         container (str, optional): The name of the storage container for
                                    uploads
@@ -28,9 +30,10 @@ class PublishingMetadata(object):
     def __init__(self, image_path, image_name, description=None,
                  container=None, arch=None, virt_type=None,
                  root_device_name=None, volume_type=None,
-                 accounts=[], groups=[]):
+                 accounts=[], groups=[], snapshot_name=None):
         self.image_path = image_path
         self.image_name = image_name
+        self.snapshot_name = snapshot_name or self._default_snapshot_name
         self.description = description
         self.container = container
         self.arch = arch
@@ -41,7 +44,7 @@ class PublishingMetadata(object):
         self.groups = groups
 
     @property
-    def snapshot_name(self):
+    def _default_snapshot_name(self):
         return os.path.splitext(self.object_name)[0]
 
     @property
