@@ -24,6 +24,28 @@ class TestAWSPublishingMetadata(unittest.TestCase):
                           image_path='/some/fake/path/to/image.raw',
                           image_name='fakeimagename')
 
+    def test_default_snapshot_name(self):
+        """
+        Test that a snapshot name by default is derived from the image
+        filename.
+        """
+        metadata = AWSPublishingMetadata(image_path='/somedir/some-image.raw',
+                                         image_name='fakeimagename',
+                                         container='abcdef')
+
+        self.assertEqual(metadata.snapshot_name, 'some-image')
+
+    def test_explicit_snapshot_name(self):
+        """
+        Test that a snapshot name can be provided explicitly.
+        """
+        metadata = AWSPublishingMetadata(image_path='/somedir/some-image.raw',
+                                         image_name='fakeimagename',
+                                         snapshot_name='mysnapshot',
+                                         container='abcdef')
+
+        self.assertEqual(metadata.snapshot_name, 'mysnapshot')
+
 
 class TestAWSService(unittest.TestCase):
 
