@@ -16,7 +16,7 @@ deploy:
   provider: pypi
   user: __token__
   password:
-    # to be done
+    secure: HMrylYOadGSWvaUMhcwC4Ky1zyKSuK02tsPvzdLtbvnmS4PT+rCfe1I9rHJTkfwEwYT+sAexSMSTZNyPSUWhRWy9gATKxINHeHlvp3l2xWKHg+zG5WTgOoVkSTt0JCGXPv86/h5NWQrEuLBJdfdwOX6+Ai0qNI8iCJUoGe1MHIPDUBUzOMMV//XzN2xGMc02pHx2J2m0PVC9lkvPmhuI8CPcF9BS4kdkisSNoTJk8wbPAc2uMEs8FFJgncsSUUC4yyaLHcIf9eu8ZfXkV9LIGLaxWimh094EPRISmRb7GCaau9rMuO+ditni5S6nUc2/7eISDQ1UzlYajE1jAERCP/JtlmTzIqsEmhpMVTj38k843Adakd3xcrVwc4xwI1OTAqBINcCqjUArfnePvIiT4jFX2Mzt/OHrjo1Ki0VSvbGvJKufQ08oW7hDfAe8okJK4asqkaLE3D9A+bLfK709bZulqK+Y5lmZ+01wafC+m3Oi/YG1Gt3n6GtWXGT8ix4zG+XTCq0M/96O66/A6pAka1BK1M3sygVuouc3N1zZ/IARCGxyp455yNbRWQmH2Fn0JehT/eS3CSWQzouQRHD4eBHHZd4rKefGVl7GnbgsxoYlV0hQMXpkUEzgmgj5vQGMUoGabdG/EIUMOpz4a7HQCX+2FI15AH4W8e7cI2jJAyQ=
   on:
     tags: true
     condition: $DEPLOY = 1

@@ -2,16 +2,16 @@ from setuptools import setup, find_packages
 
 setup(
     name='cloudimg',
-    version='0.2.6',
+    version='1.1.0',
     author='Alex Misstear',
     author_email='amisstea@redhat.com',
     description=('Services for building and releasing products in cloud '
                  'environments'),
     license='GPLv3',
-    url='https://gitlab.cee.redhat.com/rad/cloud-image',
+    url='https://github.com/release-engineering/cloudimg',
     packages=find_packages(),
     install_requires=[
-        'boto3==1.4.6',
+        'boto3',
         'requests',
     ]
 )
