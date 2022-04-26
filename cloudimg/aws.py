@@ -380,6 +380,7 @@ class AWSService(BaseService):
                     log.info('Object already exists')
 
                 snapshot = self.import_snapshot(obj, metadata.snapshot_name)
+                self.share_snapshot(snapshot, metadata.snapshot_account_ids)
             else:
                 log.info('Snapshot already exists with id: %s', snapshot.id)
 
@@ -546,3 +547,24 @@ class AWSService(BaseService):
         }
 
         image.modify_attribute(**attrs)
+
+    def share_snapshot(self, snapshot, accounts):
+        """
+        Shares a snapshot with other user accounts.
+
+        Args:
+            snapshot (Snapshot): An EC2 Snapshot
+            accounts (list, optional): Names of accounts to share with
+        """
+        if not accounts:
+            return
+
+        log.info('Sharing %s with accounts: %s', snapshot.name, accounts)
+
+        attrs = {
+            'Attribute': 'createVolumePermission',
+            'CreateVolumePermission': {
+                'Add': [{'UserId': u} for u in accounts]
+            }
+        }
+        snapshot.modify_attribute(**attrs)

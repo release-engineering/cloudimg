@@ -228,6 +228,21 @@ class TestAWSService(unittest.TestCase):
         self.svc.share_image(image, accounts=accounts, groups=groups)
         image.modify_attribute.assert_not_called()
 
+    def test_share_snapshot(self):
+        accounts = ['account1', 'account2']
+
+        snapshot = MagicMock()
+
+        self.svc.share_snapshot(snapshot, accounts=accounts, )
+        snapshot.modify_attribute.assert_called_once_with(
+            Attribute="createVolumePermission",
+            CreateVolumePermission={
+                'Add': [
+                    {'UserId': 'account1'},
+                    {'UserId': 'account2'},
+                ]
+            })
+
     @patch('cloudimg.aws.AWSService.wait_for_import_snapshot_task')
     def test_import_snapshot(self, mock_wait):
         snapshot = mock_wait.return_value = MagicMock()
