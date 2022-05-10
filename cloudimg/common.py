@@ -25,15 +25,19 @@ class PublishingMetadata(object):
                                    the image
         groups (list, optional): Groups which will have permission to use the
                                  image
+        snapshot_account_ids (list, optional): Accounts which will have
+                                            permission to create the snapshot
     """
 
     def __init__(self, image_path, image_name, description=None,
                  container=None, arch=None, virt_type=None,
                  root_device_name=None, volume_type=None,
-                 accounts=[], groups=[], snapshot_name=None):
+                 accounts=[], groups=[], snapshot_name=None,
+                 snapshot_account_ids=None):
         self.image_path = image_path
         self.image_name = image_name
         self.snapshot_name = snapshot_name or self._default_snapshot_name
+        self.snapshot_account_ids = snapshot_account_ids
         self.description = description
         self.container = container
         self.arch = arch
