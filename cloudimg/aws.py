@@ -118,7 +118,7 @@ class UploadProgress(object):
 
             # Log determinate when overdue or at 100%
             if self.determinate and (self.done or overdue):
-                percentage = (float(self._seen)/self._size) * 100
+                percentage = (float(self._seen) / self._size) * 100
                 log.info('Bytes uploaded (%s/%s): %s/%s (%.2f%%)',
                          self.container_name, self.object_name, self._seen,
                          self._size, percentage)
@@ -380,7 +380,8 @@ class AWSService(BaseService):
                     log.info('Object already exists')
 
                 snapshot = self.import_snapshot(obj, metadata.snapshot_name)
-                self.share_snapshot(snapshot, metadata.snapshot_account_ids)
+                self.share_snapshot(snapshot, metadata.snapshot_name,
+                                    metadata.snapshot_account_ids)
             else:
                 log.info('Snapshot already exists with id: %s', snapshot.id)
 
@@ -412,7 +413,7 @@ class AWSService(BaseService):
         description = 'cloudimg import of %s' % source
 
         disk_container = {
-            'Description':  description,
+            'Description': description,
             'Format': 'raw',
             'UserBucket': {
                 'S3Bucket': obj.bucket_name,
@@ -548,18 +549,19 @@ class AWSService(BaseService):
 
         image.modify_attribute(**attrs)
 
-    def share_snapshot(self, snapshot, accounts):
+    def share_snapshot(self, snapshot, snapshot_name, accounts):
         """
         Shares a snapshot with other user accounts.
 
         Args:
             snapshot (Snapshot): An EC2 Snapshot
+            snapshot_name (str): Name given to the snapshot on creation
             accounts (list, optional): Names of accounts to share with
         """
         if not accounts:
             return
 
-        log.info('Sharing %s with accounts: %s', snapshot.name, accounts)
+        log.info('Sharing %s with accounts: %s', snapshot_name, accounts)
 
         attrs = {
             'Attribute': 'createVolumePermission',

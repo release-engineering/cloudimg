@@ -233,7 +233,7 @@ class TestAWSService(unittest.TestCase):
 
         snapshot = MagicMock()
 
-        self.svc.share_snapshot(snapshot, accounts=accounts, )
+        self.svc.share_snapshot(snapshot, "snapshot_name", accounts=accounts, )
         snapshot.modify_attribute.assert_called_once_with(
             Attribute="createVolumePermission",
             CreateVolumePermission={
