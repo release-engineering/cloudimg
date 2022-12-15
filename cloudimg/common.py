@@ -1,3 +1,4 @@
+from abc import ABCMeta, abstractmethod
 import logging
 import os
 
@@ -62,4 +63,18 @@ class BaseService(object):
     """
     Base class for all cloud provider services.
     """
-    pass
+
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def publish(self, metadata):
+        """
+        Upload a VM image into a cloud marketplace and make it available for
+        all required accounts/groups.
+
+        Args:
+            metadata (PublishingMetadata): metadata for the VM image.
+        Returns:
+            The published object depending on the cloud.
+        """
+        raise NotImplementedError
