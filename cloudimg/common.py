@@ -1,3 +1,4 @@
+from abc import ABCMeta, abstractmethod
 import logging
 import os
 
@@ -27,13 +28,14 @@ class PublishingMetadata(object):
                                  image
         snapshot_account_ids (list, optional): Accounts which will have
                                             permission to create the snapshot
+        tags (dict, optional): Tags to be applied to the image.
     """
 
     def __init__(self, image_path, image_name, description=None,
                  container=None, arch=None, virt_type=None,
                  root_device_name=None, volume_type=None,
                  accounts=[], groups=[], snapshot_name=None,
-                 snapshot_account_ids=None):
+                 snapshot_account_ids=None, tags=None):
         self.image_path = image_path
         self.image_name = image_name
         self.snapshot_name = snapshot_name or self._default_snapshot_name
@@ -46,6 +48,7 @@ class PublishingMetadata(object):
         self.volume_type = volume_type
         self.accounts = accounts
         self.groups = groups
+        self.tags = tags
 
     @property
     def _default_snapshot_name(self):
@@ -60,4 +63,18 @@ class BaseService(object):
     """
     Base class for all cloud provider services.
     """
-    pass
+
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def publish(self, metadata):
+        """
+        Upload a VM image into a cloud marketplace and make it available for
+        all required accounts/groups.
+
+        Args:
+            metadata (PublishingMetadata): metadata for the VM image.
+        Returns:
+            The published object depending on the cloud.
+        """
+        raise NotImplementedError
