@@ -84,7 +84,8 @@ def _get_tags_filter_expression(tags):
 
     # Create the filter expression like:
     # "tag1"='value1" and "tag2" = 'value2" ...
-    return " and ".join(["\"%s\"='%s'" % (k, v) for k, v in tags.items()])
+    items = sorted(tags.items())
+    return " and ".join(["\"%s\"='%s'" % (k, v) for k, v in items])
 
 
 @attr.s
@@ -277,6 +278,7 @@ class AzureService(BaseService):
             FilteredBlob with the result or None when not found.
         """
         filter_expression = _get_tags_filter_expression(tags)
+        blobs_list = None
 
         # Search for the given tags in each container on storage account
         for cprops in self.blob_service_client.list_containers():
@@ -285,11 +287,15 @@ class AzureService(BaseService):
                 blobs_list = container_client.find_blobs_by_tags(
                     filter_expression=filter_expression
                 )
-                try:
-                    return blobs_list.next()
-                except StopIteration:
-                    continue
-        return
+                for tag in tags.keys():
+                    log.debug("Filtering the blob with the tag: %s" % tag)
+                    try:
+                        blobs_list = blobs_list.next()
+                    except StopIteration:
+                        log.debug("Blob with tag \"%s\" was not found" % tag)
+                        blobs_list = None
+                        break
+        return blobs_list
 
     @staticmethod
     def are_tags_present(container_client, tags):
@@ -309,10 +315,15 @@ class AzureService(BaseService):
         blobs_list = container_client.find_blobs_by_tags(
             filter_expression=filter_expression
         )
-        try:
-            blobs_list.next()
-        except StopIteration:
-            result = False
+
+        for tag in tags.keys():
+            log.debug("Searching for blob with the tag: %s" % tag)
+            try:
+                blobs_list = blobs_list.next()
+            except StopIteration:
+                log.debug("Blob with tag \"%s\" was not found" % tag)
+                result = False
+                break
         return result
 
     def upload_callback(self, response):

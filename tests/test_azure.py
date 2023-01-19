@@ -344,6 +344,49 @@ class TestAzureService(unittest.TestCase):
         assert mock_get.call_count == loops
         self.assertIsNone(res)
 
+    @patch('cloudimg.ms_azure.AzureService.get_container_by_name')
+    def test_filter_object_by_tags_multiple_tags(self, mock_get):
+        loops = 10
+        # Container properties
+        mock_cprops = MagicMock()
+        mock_cprops.name = 'foo'
+        list_containers = [mock_cprops for _ in range(loops)]
+        calls = [call(name='foo') for _ in range(loops)]
+        # Blob Service Client
+        mock_blob_sc = MagicMock()
+        mock_blob_sc.list_containers.return_value = list_containers
+        # Container Client / blobs_list
+        mock_cc = MagicMock()
+        mock_blob_list = MagicMock()
+        # The tags loop will only run 5 times
+        mock_blob_list.next.side_effect = [
+                                              mock_blob_list for _ in range(4)
+                                          ] + [StopIteration]
+        mock_cc.find_blobs_by_tags.return_value = mock_blob_list
+        # With this the last "container" will be the only one found
+        get_containers = [None for _ in range(loops - 1)]
+        get_containers.append(mock_cc)
+        # Monkeypatching
+        mock_get.side_effect = get_containers
+        self.svc.blob_service_client = mock_blob_sc
+        self.md.tags.update({"tag%d" % i: "tag%d" % i for i in range(5)})
+
+        res = self.svc.filter_object_by_tags(tags=self.md.tags)
+
+        expr = " and ".join(
+            ["\"tag\"='tag'"] + [
+                "\"tag%d\"='tag%d'" % (i, i) for i in range(5)
+            ]
+        )
+        mock_blob_sc.list_containers.assert_called_once()
+        mock_get.assert_has_calls(calls=calls)
+        mock_cc.find_blobs_by_tags.assert_called_once_with(
+            filter_expression=expr
+        )
+        assert mock_get.call_count == 10
+        assert mock_blob_list.next.call_count == 5
+        self.assertIsNone(res)
+
     def test_are_tags_present_true(self):
         mock_cc = MagicMock()
         mock_blob_list = MagicMock()
@@ -375,6 +418,26 @@ class TestAzureService(unittest.TestCase):
             filter_expression="\"tag\"='tag'"
         )
         mock_blob_list.next.assert_called_once()
+        self.assertFalse(res)
+
+    def test_are_tags_present_multiple_tags(self):
+        mock_cc = MagicMock()
+        mock_blob_list = MagicMock()
+        # With this the loop will stop after the 2nd iteration
+        mock_blob_list.next.side_effect = [mock_blob_list, StopIteration]
+        mock_cc.find_blobs_by_tags.return_value = mock_blob_list
+
+        self.md.tags.update({"tag2": "tag2", "tag3": "tag3"})
+
+        res = self.svc.are_tags_present(
+                  container_client=mock_cc,
+                  tags=self.md.tags
+              )
+        expr = "\"tag\"='tag' and \"tag2\"='tag2' and \"tag3\"='tag3'"
+        mock_cc.find_blobs_by_tags.assert_called_once_with(
+            filter_expression=expr
+        )
+        assert mock_blob_list.next.call_count == 2
         self.assertFalse(res)
 
     def test_upload_callback(self):
