@@ -1,11 +1,8 @@
 from datetime import datetime, timedelta
 import logging
 import os
-try:
-    from time import monotonic
-except ImportError:
-    # Python < 3.3
-    from monotonic import monotonic
+
+from time import monotonic
 
 import attr
 

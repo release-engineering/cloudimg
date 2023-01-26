@@ -1,11 +1,7 @@
 from copy import deepcopy
 import unittest
 
-try:
-    from unittest.mock import MagicMock, patch
-except ImportError:
-    # Python <= 2.7
-    from mock import MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from cloudimg.aws import (
     AWSService, AWSPublishingMetadata, ClientError,
