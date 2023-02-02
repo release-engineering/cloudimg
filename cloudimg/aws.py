@@ -160,6 +160,28 @@ class AWSService(BaseService):
 
         super(AWSService, self).__init__()
 
+    def get_image_by_filters(self, filters):
+        """
+        Finds an image with the given filters.
+
+        Args:
+            filters (list): List with the filters (dict) to apply.
+
+        Returns:
+            An EC2 Image if found; None otherwise
+        """
+        rsp = self.ec2.meta.client.describe_images(
+            Owners=['self'],
+            Filters=filters,
+        )
+
+        images = rsp['Images']
+
+        if not images:
+            return None
+
+        return self.ec2.Image(images[0]['ImageId'])
+
     def get_image_by_name(self, name):
         """
         Finds an image with a given name.
@@ -170,20 +192,37 @@ class AWSService(BaseService):
         Returns:
             An EC2 Image if found; None otherwise
         """
-        rsp = self.ec2.meta.client.describe_images(
-            Owners=['self'],
-            Filters=[{
+        filters = [
+            {
                 'Name': 'name',
                 'Values': [name],
-            }],
-        )
+            }
+        ]
 
-        images = rsp['Images']
+        return self.get_image_by_filters(filters)
 
-        if not images:
+    def get_image_by_tags(self, tags):
+        """
+        Finds an image with the given tags.
+
+        Args:
+            tags (dict): The tags to filter the image
+
+        Returns:
+            An EC2 Image if found; None otherwise
+        """
+        if not tags:
             return None
 
-        return self.ec2.Image(images[0]['ImageId'])
+        filters = [
+            {
+                'Name': 'tag:%s' % k,
+                'Values': [v],
+            }
+            for k, v in tags.items()
+        ]
+
+        return self.get_image_by_filters(filters)
 
     def get_snapshot_by_name(self, name):
         """
@@ -357,7 +396,10 @@ class AWSService(BaseService):
             An EC2 Image
         """
         log.info('Searching for image: %s', metadata.image_name)
-        image = self.get_image_by_name(metadata.image_name)
+        image = (
+            self.get_image_by_name(metadata.image_name) or
+            self.get_image_by_tags(metadata.tags)
+        )
 
         if not image:
             log.info('Image does not exist: %s', metadata.image_name)
@@ -513,7 +555,7 @@ class AWSService(BaseService):
         }]
 
         log.info('Registering image: %s', metadata.image_name)
-        return self.ec2.register_image(
+        image = self.ec2.register_image(
             Name=metadata.image_name,
             Description=metadata.description,
             Architecture=metadata.arch,
@@ -524,6 +566,9 @@ class AWSService(BaseService):
             SriovNetSupport=metadata.sriov_net_support,
             BillingProducts=metadata.billing_products
         )
+        if metadata.tags:
+            self.tag_image(image, metadata.tags)
+        return image
 
     def share_image(self, image, accounts=[], groups=[]):
         """
@@ -570,3 +615,31 @@ class AWSService(BaseService):
             }
         }
         snapshot.modify_attribute(**attrs)
+
+    def tag_image(self, image, tags):
+        """
+        Apply the corresponding tags to an image
+
+        Args:
+            image (Image): An EC2 Image
+            tags (dict): Dictionary with the tags to apply
+
+        Returns:
+            A list of tag resources
+        """
+        log.info('Tagging image: %s with %s', image.name, tags)
+
+        # AWS expects a list of dicionaries for each tag
+        attrs = {
+            'DryRun': False,
+            'Tags': [
+                {
+                    "Key": k,
+                    "Value": v,
+                } for k, v in tags.items()
+            ],
+        }
+
+        res = image.create_tags(**attrs)
+        log.debug("Tag image \"%s\" results: %s" % image.name, res)
+        return res
