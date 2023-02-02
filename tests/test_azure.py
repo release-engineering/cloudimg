@@ -1,10 +1,7 @@
 from tempfile import NamedTemporaryFile
 import unittest
-try:
-    from unittest.mock import MagicMock, patch, call, ANY
-except ImportError:
-    # Python <= 2.7
-    from mock import MagicMock, patch, call, ANY
+
+from unittest.mock import MagicMock, patch, call, ANY
 
 from cloudimg.ms_azure import (
     AzurePublishingMetadata,

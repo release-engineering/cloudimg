@@ -1,4 +1,0 @@
-boto3==1.4.6
-azure-storage-blob==12.9.0
-azure-mgmt-storage==19.0.0
-monotonic==1.6

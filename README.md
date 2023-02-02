@@ -10,12 +10,12 @@ A library for uploading and publishing disk images on various clouds
 
 ## Development
 
-It's best to develop with python 2.6 since that is the minimum supported
+It's best to develop with python 3.6 since that is the minimum supported
 version and tends to have the most restrictive features.
 
 ```
 # Setup a virtual environment
-virtualenv -p python2.6 venv
+virtualenv -p python3.6 venv
 source venv/bin/activate
 
 # Install the package for development
