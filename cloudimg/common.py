@@ -59,6 +59,29 @@ class PublishingMetadata(object):
         return os.path.basename(self.image_path)
 
 
+class DeleteMetadata(object):
+    """
+    A collection of metadata necessary for deleting a disk image and its
+    dependent objects from a cloud provider.
+
+    Args:
+        image_id (str): The id of image. Used as a primary identifier.
+        image_name (str, optional): The name of the image.
+        snapshot_id (str, optional): The id f snaphost.
+        snapshot_name (str, optional): The name of the snapshot.
+        skip_snapshot (bool, optional): If true, deletion of snapshot is
+                                        skipped. Default=False.
+    """
+    def __init__(self, image_id, image_name=None, snapshot_id=None,
+                 snapshot_name=None, skip_snapshot=False):
+
+        self.image_id = image_id
+        self.image_name = image_name
+        self.snapshot_id = snapshot_id
+        self.snapshot_name = snapshot_name
+        self.skip_snapshot = skip_snapshot
+
+
 class BaseService(object):
     """
     Base class for all cloud provider services.
@@ -76,5 +99,16 @@ class BaseService(object):
             metadata (PublishingMetadata): metadata for the VM image.
         Returns:
             The published object depending on the cloud.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def delete(self, metadata):
+        """
+        Delete a VM image from a cloud marketplace and
+        all its dependent objects.
+
+        Args:
+            metadata (DeleteMetadata): metadata for the VM image.
         """
         raise NotImplementedError
