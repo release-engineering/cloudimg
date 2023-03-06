@@ -503,6 +503,12 @@ class TestAzureService(unittest.TestCase):
         mock_blob.upload_blob.side_effect = mock_callback
 
         with NamedTemporaryFile() as tmpfile:
+            # Write some testing data
+            tmpfile.seek(1020)
+            tmpfile.write(b"1234")
+            tmpfile.flush()
+
+            # Test the upload
             res = self.svc.upload_to_container(
                     image_path=tmpfile.name,
                     container_name=self.md.container,
@@ -518,6 +524,7 @@ class TestAzureService(unittest.TestCase):
         mock_blob.exists.assert_called_once()
         mock_blob.upload_blob.assert_called_once_with(
             data=ANY,
+            length=1024,
             tags=self.md.tags,
             max_concurrency=self.svc.UPLOAD_MAX_CONCURRENCY,
             raw_response_hook=mock_callback,

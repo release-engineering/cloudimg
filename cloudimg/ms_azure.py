@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import logging
+import lzma
 import os
 
 from time import monotonic
@@ -375,6 +376,15 @@ class AzureService(BaseService):
             create=True
         )
 
+        # Azure can't handle compressed images on marketplaces so we need to
+        # send the decompressed data to its storage account.
+        if object_name.endswith(".xz"):
+            log.info("Processing a LZMA compressed file: %s.", object_name)
+            object_name = object_name.rstrip(".xz")
+            open_func = lzma.open
+        else:
+            open_func = open
+
         # Check the image tags
         log.info("Checking whether the image was already uploaded.")
         if self.are_tags_present(container_client, tags):
@@ -406,8 +416,18 @@ class AzureService(BaseService):
         if image_path.startswith("http:") or image_path.startswith("https:"):
             blob_client.upload_blob_from_url(source_url=image_path, **kwargs)
         else:
-            with open(image_path, "rb") as data:
-                blob_client.upload_blob(data=data, **kwargs)
+            with open_func(image_path, "rb") as data:
+                # we need to pass the lenght to upload_blob as it will try to
+                # guess the length of LZMAFile and it get the incorrect value,
+                # which is the size of compressed file.
+                bytes_count = data.seek(0, os.SEEK_END)
+                data.seek(0)
+                log.debug("Upload size: %d bytes", bytes_count)
+                blob_client.upload_blob(
+                    data=data,
+                    length=bytes_count,
+                    **kwargs
+                )
         log.info(str(self._upload_progress))
         log.info('Successfully uploaded %s', image_path)
         return blob_client
@@ -418,6 +438,9 @@ class AzureService(BaseService):
 
         This method relies on unique image/metadata names in order to do the
         least amount of work possible.
+
+        If the incoming ``metadata.image_name`` is compressed as ``.xz`` its
+        content will be automatically decompressed before uploading.
 
         Args:
             metadata (AzurePublishingMetadata): Metadata about the VHD image
