@@ -17,6 +17,10 @@ from azure.storage.blob import (
 
 from cloudimg.common import BaseService, PublishingMetadata
 
+# Disable noisy Azure HTTPS requests debug/info logs
+azure_logger = "azure.core.pipeline.policies.http_logging_policy"
+logging.getLogger(azure_logger).setLevel(logging.WARNING)
+
 log = logging.getLogger(__name__)
 
 
