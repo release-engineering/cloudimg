@@ -7,7 +7,7 @@ from boto3.session import Session
 from botocore.exceptions import ClientError
 import requests
 
-from cloudimg.common import BaseService, PublishingMetadata
+from cloudimg.common import BaseService, PublishingMetadata, DeleteMetadata
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +49,10 @@ class AWSPublishingMetadata(PublishingMetadata):
         super(AWSPublishingMetadata, self).__init__(*args, **kwargs)
 
         assert self.container, 'A container must be defined'
+
+
+class AWSDeleteMetadata(DeleteMetadata):
+    pass
 
 
 class UploadProgress(object):
@@ -192,6 +196,9 @@ class AWSService(BaseService):
         Returns:
             An EC2 Image if found; None otherwise
         """
+        if not name:
+            return None
+
         filters = [
             {
                 'Name': 'name',
@@ -224,6 +231,28 @@ class AWSService(BaseService):
 
         return self.get_image_by_filters(filters)
 
+    def get_image_by_id(self, image_id):
+        """
+        Finds an image by image id.
+
+        Args:
+            id (str): The id of the image
+
+        Returns:
+            An EC2 Image if found; None otherwise
+        """
+        if not image_id:
+            return None
+
+        filters = [
+            {
+                'Name': 'image-id',
+                'Values': [image_id],
+            }
+        ]
+
+        return self.get_image_by_filters(filters)
+
     def get_snapshot_by_name(self, name):
         """
         Finds a snapshot with a given name.
@@ -234,11 +263,42 @@ class AWSService(BaseService):
         Returns:
             An EC2 Snapshot if found; None otherwise
         """
+        if not name:
+            return None
+
         rsp = self.ec2.meta.client.describe_snapshots(
             OwnerIds=['self'],
             Filters=[{
                 'Name': 'tag:Name',
                 'Values': [name],
+            }],
+        )
+
+        snapshots = rsp['Snapshots']
+
+        if not snapshots:
+            return None
+
+        return self.ec2.Snapshot(snapshots[0]['SnapshotId'])
+
+    def get_snapshot_by_id(self, snapshot_id):
+        """
+        Finds a snapshot by snapshot id.
+
+        Args:
+            snapshot_id (str): The id of the snapshot
+
+        Returns:
+            An EC2 Snapshot if found; None otherwise
+        """
+        if not snapshot_id:
+            return None
+
+        rsp = self.ec2.meta.client.describe_snapshots(
+            OwnerIds=['self'],
+            Filters=[{
+                'Name': 'snapshot-id',
+                'Values': [snapshot_id],
             }],
         )
 
@@ -643,3 +703,98 @@ class AWSService(BaseService):
         res = image.create_tags(**attrs)
         log.debug("Tag image \"%s\" results: %s" % image.name, res)
         return res
+
+    def deregister_image(self, image):
+        """
+        Deregisters AMI image from AWS.
+
+        Args:
+            image (Image): An EC2 Image
+
+        Returns:
+            Id of deregistered image. (str)
+        """
+        image_id, image_name = image.id, image.name
+        logging.info("Deregistering image %s (%s)", image_id, image_name)
+
+        image.deregister()
+
+        logging.debug("Deregister image %s (%s)",
+                      image_id, image_name)
+
+        return image_id
+
+    def delete_snapshot(self, snapshot):
+        """
+        Deletes snapshot from AWS.
+
+        Args:
+            snapshot (Snapshot): An EC2 Snapshot
+
+        Returns:
+            Id of deleted snapshot. (str)
+        """
+        snapshot_id = snapshot.id
+        logging.info("Deleting snapshot %s", snapshot_id)
+
+        snapshot.delete()
+
+        logging.debug("Deleted snapshot %s", snapshot_id)
+
+        return snapshot_id
+
+    def delete(self, metadata):
+        """
+        Deletes AMI images and snapshot for given metadata.
+
+        If specified image is not found, we try to find snapshot
+        by other provided metadata.
+
+        Args:
+            metadata (AWSDeleteMetadata): Metadata about the image
+
+        Returns:
+            tuple (image_id[Str], snapshot_id[Str]]) of removed objects.
+        """
+        deleted_image_id = None
+        deleted_snapshot_id = None
+
+        log.info('Searching for image: %s', metadata.image_id)
+        image = (
+            self.get_image_by_id(metadata.image_id) or
+            self.get_image_by_name(metadata.image_name)
+        )
+
+        if image:
+            snapshot_id = None
+            # extract snapshot_id from existing image
+            if image.block_device_mappings:
+                snapshot_id = image.block_device_mappings[0]\
+                              .get("Ebs", {}).get("SnapshotId") or None
+
+            if snapshot_id is None:
+                log.info('Image %s does not reference related snapshot')
+
+            snapshot = self.get_snapshot_by_id(snapshot_id)
+            deleted_image_id = self.deregister_image(image)
+
+        # image doesn't exist, let's try to find snapshot
+        # by other provided metadata
+        else:
+            log.info('Image does not exist: %s', metadata.image_id)
+            log.info('Searching for snapshot: %s', metadata.snapshot_id)
+            snapshot = (
+                self.get_snapshot_by_id(metadata.snapshot_id) or
+                self.get_snapshot_by_name(metadata.snapshot_name)
+            )
+            if not snapshot:
+                log.info('Snapshot (%s) does not exist', metadata.snapshot_id)
+
+        if snapshot:
+            if metadata.skip_snapshot:
+                log.info("Skipping snapshot (%s) deletion because "
+                         "skip_snapshot is set to True", snapshot.id)
+            else:
+                deleted_snapshot_id = self.delete_snapshot(snapshot)
+
+        return deleted_image_id, deleted_snapshot_id
