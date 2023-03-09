@@ -413,21 +413,18 @@ class AzureService(BaseService):
 
         log.info('Uploading %s to container %s', image_path, container_name)
         log.info('Uploading %s with name %s', image_path, object_name)
-        if image_path.startswith("http:") or image_path.startswith("https:"):
-            blob_client.upload_blob_from_url(source_url=image_path, **kwargs)
-        else:
-            with open_func(image_path, "rb") as data:
-                # we need to pass the lenght to upload_blob as it will try to
-                # guess the length of LZMAFile and it get the incorrect value,
-                # which is the size of compressed file.
-                bytes_count = data.seek(0, os.SEEK_END)
-                data.seek(0)
-                log.debug("Upload size: %d bytes", bytes_count)
-                blob_client.upload_blob(
-                    data=data,
-                    length=bytes_count,
-                    **kwargs
-                )
+        with open_func(image_path, "rb") as data:
+            # we need to pass the lenght to upload_blob as it will try to
+            # guess the length of LZMAFile and it get the incorrect value,
+            # which is the size of compressed file.
+            bytes_count = data.seek(0, os.SEEK_END)
+            data.seek(0)
+            log.debug("Upload size: %d bytes", bytes_count)
+            blob_client.upload_blob(
+                data=data,
+                length=bytes_count,
+                **kwargs
+            )
         log.info(str(self._upload_progress))
         log.info('Successfully uploaded %s', image_path)
         return blob_client
