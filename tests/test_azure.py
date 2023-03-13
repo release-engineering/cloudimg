@@ -450,45 +450,6 @@ class TestAzureService(unittest.TestCase):
     @patch('cloudimg.ms_azure.AzureService.upload_callback')
     @patch('cloudimg.ms_azure.AzureService.are_tags_present')
     @patch('cloudimg.ms_azure.AzureService.get_container_by_name')
-    def test_upload_to_container_blob_from_https(self,
-                                                 mock_get,
-                                                 mock_are_tags,
-                                                 mock_callback):
-        mock_blob = MagicMock()
-        mock_blob.exists.return_value = False
-        mock_cc = MagicMock()
-        mock_cc.get_blob_client.return_value = mock_blob
-        mock_get.return_value = mock_cc
-        mock_are_tags.return_value = False
-        mock_blob.upload_blob_from_url.side_effect = mock_callback
-        mock_blob.upload_blob.side_effect = mock_callback
-
-        res = self.svc.upload_to_container(
-                  image_path='https://foo/bar',
-                  container_name=self.md.container,
-                  object_name=self.md.object_name,
-                  tags=self.md.tags
-              )
-
-        mock_get.assert_called_once_with(name=self.md.container, create=True)
-        mock_are_tags.assert_called_once_with(mock_cc, self.md.tags)
-        mock_cc.get_blob_client.assert_called_once_with(
-            blob=self.md.object_name
-        )
-        mock_blob.exists.assert_called_once()
-        mock_blob.upload_blob_from_url.assert_called_once_with(
-            source_url='https://foo/bar',
-            tags=self.md.tags,
-            max_concurrency=self.svc.UPLOAD_MAX_CONCURRENCY,
-            raw_response_hook=mock_callback,
-        )
-        mock_blob.upload_blob.assert_not_called()
-        mock_callback.assert_called_once()
-        self.assertEqual(res, mock_blob)
-
-    @patch('cloudimg.ms_azure.AzureService.upload_callback')
-    @patch('cloudimg.ms_azure.AzureService.are_tags_present')
-    @patch('cloudimg.ms_azure.AzureService.get_container_by_name')
     def test_upload_to_container_blob_from_storage(self,
                                                    mock_get,
                                                    mock_are_tags,
@@ -499,10 +460,15 @@ class TestAzureService(unittest.TestCase):
         mock_cc.get_blob_client.return_value = mock_blob
         mock_get.return_value = mock_cc
         mock_are_tags.return_value = False
-        mock_blob.upload_blob_from_url.side_effect = mock_callback
         mock_blob.upload_blob.side_effect = mock_callback
 
         with NamedTemporaryFile() as tmpfile:
+            # Write some testing data
+            tmpfile.seek(1020)
+            tmpfile.write(b"1234")
+            tmpfile.flush()
+
+            # Test the upload
             res = self.svc.upload_to_container(
                     image_path=tmpfile.name,
                     container_name=self.md.container,
@@ -518,11 +484,11 @@ class TestAzureService(unittest.TestCase):
         mock_blob.exists.assert_called_once()
         mock_blob.upload_blob.assert_called_once_with(
             data=ANY,
+            length=1024,
             tags=self.md.tags,
             max_concurrency=self.svc.UPLOAD_MAX_CONCURRENCY,
             raw_response_hook=mock_callback,
         )
-        mock_blob.upload_blob_from_url.assert_not_called()
         mock_callback.assert_called_once()
         self.assertEqual(res, mock_blob)
 
