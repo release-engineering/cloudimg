@@ -11,6 +11,7 @@ from azure.storage.blob import (
     AccountSasPermissions,
     BlobServiceClient,
     BlobSasPermissions,
+    BlobType,
     generate_account_sas,
     generate_blob_sas,
     ResourceTypes,
@@ -422,6 +423,7 @@ class AzureService(BaseService):
             log.debug("Upload size: %d bytes", bytes_count)
             blob_client.upload_blob(
                 data=data,
+                blob_type=BlobType.PAGEBLOB,
                 length=bytes_count,
                 **kwargs
             )
