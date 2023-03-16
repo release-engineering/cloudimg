@@ -8,6 +8,7 @@ from cloudimg.ms_azure import (
     AzureService,
     BlobNotFoundError,
     BlobServiceClient,
+    BlobType,
     UploadProgress,
 )
 
@@ -484,6 +485,7 @@ class TestAzureService(unittest.TestCase):
         mock_blob.exists.assert_called_once()
         mock_blob.upload_blob.assert_called_once_with(
             data=ANY,
+            blob_type=BlobType.PAGEBLOB,
             length=1024,
             tags=self.md.tags,
             max_concurrency=self.svc.UPLOAD_MAX_CONCURRENCY,
