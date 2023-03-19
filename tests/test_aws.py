@@ -1,11 +1,12 @@
 from copy import deepcopy
+from tempfile import NamedTemporaryFile
 import unittest
 
 from unittest.mock import MagicMock, patch
 
 from cloudimg.aws import (
     AWSService, AWSPublishingMetadata, ClientError,
-    SnapshotError, SnapshotTimeout, AWSDeleteMetadata
+    SnapshotError, SnapshotTimeout, AWSDeleteMetadata, UploadProgress
 )
 
 
@@ -81,6 +82,49 @@ class TestAWSService(unittest.TestCase):
         self.mock_bucket = patch.object(self.svc.s3, 'Bucket').start()
         self.mock_register_image = \
             patch.object(self.svc.ec2, 'register_image').start()
+
+    def test_init_upload_service(self):
+        upload_svc = UploadProgress("fake_container", "fake_object")
+        assert upload_svc.container_name == "fake_container"
+        assert upload_svc.object_name == "fake_object"
+        assert upload_svc._size is None
+        assert upload_svc._seen == 0
+        assert upload_svc._last_log == 0
+        assert upload_svc.determinate is False
+        try:
+            upload_svc.done
+        except AssertionError as e:
+            assert str(e) == "done unsupported for indeterminate uploads"
+
+        with self.assertLogs(level='INFO') as log:
+            expected_log = ("INFO:cloudimg.aws:Bytes uploaded "
+                            "(fake_container/fake_object): 12")
+            upload_svc.__call__(12)
+            assert log.output[0] == expected_log
+
+    def test_init_upload_service_filepath(self):
+        prefix = "test_init_upload_service_filepath_"
+        with NamedTemporaryFile(prefix=prefix, suffix=".xz") as tmpfile:
+            # Write some testing data
+            tmpfile.seek(1020)
+            tmpfile.write(b"1234")
+            tmpfile.flush()
+            upload_svc = UploadProgress("fake_container",
+                                        "fake_object",
+                                        tmpfile.name)
+        assert upload_svc.container_name == "fake_container"
+        assert upload_svc.object_name == "fake_object"
+        assert upload_svc._size == 1024
+        assert upload_svc._seen == 0
+        assert upload_svc._last_log == 0
+        assert upload_svc.determinate is True
+        assert upload_svc.done is False
+
+        with self.assertLogs(level='INFO') as log:
+            upload_svc.__call__(1024)
+            assert log.output[0] == ("INFO:cloudimg.aws:Bytes uploaded "
+                                     "(fake_container/fake_object): "
+                                     "1024/1024 (100.00%)")
 
     def test_get_image_by_name(self):
         self.mock_describe_images.return_value = {
@@ -160,6 +204,16 @@ class TestAWSService(unittest.TestCase):
         self.mock_object.assert_called_once_with(self.md.container, 'obj-name')
         self.assertEqual(obj, None)
 
+    def test_get_object_by_name_bad_code(self):
+        error = ClientError({'Error': {'Code': '505'}}, 'test-operation')
+        self.mock_object.return_value.load.side_effect = error
+        try:
+            _ = self.svc.get_object_by_name(self.md.container, 'obj-name')
+        except ClientError as e:
+            assert str(e) == ("An error occurred (505) when calling "
+                              "the test-operation operation: Unknown")
+        self.mock_object.assert_called_once_with(self.md.container, 'obj-name')
+
     def test_get_container_by_name(self):
         container = self.mock_bucket.return_value = MagicMock()
         result = self.svc.get_container_by_name(self.md.container)
@@ -173,6 +227,16 @@ class TestAWSService(unittest.TestCase):
         container = self.svc.get_container_by_name(self.md.container)
         self.mock_head_bucket.assert_called_once_with(Bucket=self.md.container)
         self.assertEqual(container, None)
+
+    def test_get_container_by_name_bad_code(self):
+        error = ClientError({'Error': {'Code': '505'}}, 'test-operation')
+        self.mock_head_bucket.side_effect = error
+        try:
+            _ = self.svc.get_container_by_name(self.md.container)
+        except ClientError as e:
+            assert str(e) == ("An error occurred (505) when calling the "
+                              "test-operation operation: Unknown")
+        self.mock_head_bucket.assert_called_once_with(Bucket=self.md.container)
 
     def test_create_container_us_east_1(self):
         container = self.mock_bucket.return_value = MagicMock()
@@ -218,6 +282,25 @@ class TestAWSService(unittest.TestCase):
         self.assertEqual(obj, result)
 
     @patch('cloudimg.aws.UploadProgress')
+    def test_upload_to_container_local_image_xz(self, mock_callback):
+        obj = self.mock_object.return_value = MagicMock()
+        prefix = "test_upload_to_container_local_image_xz_"
+
+        with NamedTemporaryFile(prefix=prefix, suffix=".xz") as tmpfile:
+            # Write some testing data
+            tmpfile.seek(1020)
+            tmpfile.write(b"1234")
+            tmpfile.flush()
+            object_name = tmpfile.name.split("/")[-1]
+            result = self.svc.upload_to_container(tmpfile.name,
+                                                  self.md.container,
+                                                  object_name)
+
+        self.assertEqual(self.mock_upload_file.call_count, 0)
+        self.assertEqual(self.mock_upload_fileobj.call_count, 1)
+        self.assertEqual(obj, result)
+
+    @patch('cloudimg.aws.UploadProgress')
     @patch('cloudimg.aws.requests')
     def test_upload_to_container_remote_image(self, mock_requests,
                                               mock_callback):
@@ -229,7 +312,8 @@ class TestAWSService(unittest.TestCase):
                                               self.md.object_name)
 
         mock_requests.get.assert_called_once_with(self.md.image_path,
-                                                  stream=True)
+                                                  stream=True,
+                                                  timeout=30)
         self.assertEqual(self.mock_upload_file.call_count, 0)
         self.assertEqual(self.mock_upload_fileobj.call_count, 1)
         self.assertEqual(obj, result)
@@ -777,6 +861,46 @@ class TestAWSService(unittest.TestCase):
 
         assert deleted_image_id == image_id
         assert deleted_snapshot_id is None
+
+    @patch('cloudimg.aws.AWSService.get_image_by_filters')
+    def test_get_image_by_tags(self, get_image_by_filters):
+        get_image_by_filters.return_value = "fake_image"
+        tags = {
+            "tags": "tag"
+        }
+        filters_call = [
+            {
+                "Name": "tag:tags",
+                "Values": ["tag"]
+            }
+        ]
+        image = self.svc.get_image_by_tags(tags)
+        assert image == "fake_image"
+        get_image_by_filters.assert_called_once_with(filters_call)
+
+    def test_tag_image(self):
+        class fake_image_class:
+            name: str = "fake_image"
+            dry_run: str
+            tags: list
+
+            def create_tags(self, **args):
+                self.dry_run = args.pop("DryRun")
+                self.tags = args.pop("Tags")
+                return self
+        tags = {
+            "tags": "tag"
+        }
+        tag_resp = [
+            {
+                "Key": "tags",
+                "Value": "tag"
+            }
+        ]
+        fake_image = fake_image_class()
+        image = self.svc.tag_image(fake_image, tags)
+        assert image.dry_run is False
+        assert image.tags == tag_resp
 
 
 if __name__ == '__main__':

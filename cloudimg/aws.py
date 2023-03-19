@@ -2,6 +2,7 @@ import logging
 import os
 import threading
 import time
+import lzma
 
 from boto3.session import Session
 from botocore.exceptions import ClientError
@@ -391,7 +392,9 @@ class AWSService(BaseService):
                             chunk_size=CHUNK_SIZE):
         """
         Uploads an image to a storage container. If the image is a remote URL,
-        it will be streamed in chunks.
+        it will be streamed in chunks. If the file is a compressed .xz file
+        it will stream the decompression to the storage container.
+        Decompressing from a remote HTTP file is not supported.
 
         Args:
             image_path (str): Local or remote HTTP path to the source image
@@ -413,14 +416,29 @@ class AWSService(BaseService):
         if image_path.lower().startswith('http'):
             # Stream the upload from a remote URL
             log.info('Opening stream to: %s', image_path)
-            resp = requests.get(image_path, stream=True)
+            resp = requests.get(image_path, stream=True, timeout=30)
             resp.raise_for_status()
             stream = resp.iter_content(chunk_size)
             callback = UploadProgress(container_name, object_name)
+            if object_name.endswith(".xz"):
+                raise NotImplementedError(
+                    "LZMA decompression is not implemented "
+                    "for S3 content from an HTTP source")
             self.s3.meta.client.upload_fileobj(stream,
                                                container_name,
                                                object_name,
                                                Callback=callback)
+        elif object_name.endswith(".xz"):
+            # Stream the decompression to the container file
+            # Can take a few minutes to load into memory
+            object_name = object_name.rstrip(".xz")
+            callback = UploadProgress(container_name, object_name)
+            log.info("Processing a LZMA compressed file: %s.", object_name)
+            with lzma.open(image_path, "rb") as data:
+                self.s3.meta.client.upload_fileobj(data,
+                                                   container_name,
+                                                   object_name,
+                                                   Callback=callback)
         else:
             callback = UploadProgress(container_name, object_name,
                                       filepath=image_path)
@@ -699,9 +717,8 @@ class AWSService(BaseService):
                 } for k, v in tags.items()
             ],
         }
-
         res = image.create_tags(**attrs)
-        log.debug("Tag image \"%s\" results: %s" % image.name, res)
+        log.debug("Tag image \"%s\" results: %s", image.name, res)
         return res
 
     def deregister_image(self, image):
