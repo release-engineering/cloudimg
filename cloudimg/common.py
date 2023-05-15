@@ -56,7 +56,7 @@ class PublishingMetadata(object):
 
     @property
     def object_name(self):
-        return os.path.basename(self.image_path)
+        return os.path.basename(self.image_path).rstrip(".xz")
 
 
 class DeleteMetadata(object):
