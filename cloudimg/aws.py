@@ -432,7 +432,8 @@ class AWSService(BaseService):
             # Stream the decompression to the container file
             # Can take a few minutes to load into memory
             callback = UploadProgress(container_name, object_name)
-            log.info("Processing a LZMA compressed file: %s.", object_name)
+            log.info("Processing a LZMA compressed file: %s.",
+                     os.path.basename(image_path))
             with lzma.open(image_path, "rb") as data:
                 self.s3.meta.client.upload_fileobj(data,
                                                    container_name,
