@@ -420,7 +420,7 @@ class AWSService(BaseService):
             resp.raise_for_status()
             stream = resp.iter_content(chunk_size)
             callback = UploadProgress(container_name, object_name)
-            if object_name.endswith(".xz"):
+            if image_path.endswith(".xz"):
                 raise NotImplementedError(
                     "LZMA decompression is not implemented "
                     "for S3 content from an HTTP source")
@@ -428,12 +428,12 @@ class AWSService(BaseService):
                                                container_name,
                                                object_name,
                                                Callback=callback)
-        elif object_name.endswith(".xz"):
+        elif image_path.endswith(".xz"):
             # Stream the decompression to the container file
             # Can take a few minutes to load into memory
-            object_name = object_name.rstrip(".xz")
             callback = UploadProgress(container_name, object_name)
-            log.info("Processing a LZMA compressed file: %s.", object_name)
+            log.info("Processing a LZMA compressed file: %s.",
+                     os.path.basename(image_path))
             with lzma.open(image_path, "rb") as data:
                 self.s3.meta.client.upload_fileobj(data,
                                                    container_name,

@@ -379,9 +379,9 @@ class AzureService(BaseService):
 
         # Azure can't handle compressed images on marketplaces so we need to
         # send the decompressed data to its storage account.
-        if object_name.endswith(".xz"):
-            log.info("Processing a LZMA compressed file: %s.", object_name)
-            object_name = object_name.rstrip(".xz")
+        if image_path.endswith(".xz"):
+            log.info("Processing a LZMA compressed file: %s.",
+                     os.path.basename(image_path))
             open_func = lzma.open
         else:
             open_func = open
