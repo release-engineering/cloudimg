@@ -456,16 +456,16 @@ class AzureService(BaseService):
         """
         log.info(
             'Searching for image: %s in container %s',
-            metadata.image_name,
+            metadata.object_name,
             metadata.container,
         )
         blob = self.get_object_by_name(
                     container=metadata.container,
-                    name=metadata.image_name,
+                    name=metadata.object_name,
                 )
 
         if not blob:
-            log.info('Image does not exist: %s', metadata.image_name)
+            log.info('Image does not exist: %s', metadata.object_name)
             log.info('Searching for tags: %s', metadata.tags)
 
             filtered_blob = self.filter_object_by_tags(metadata.tags)
