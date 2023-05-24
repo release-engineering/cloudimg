@@ -508,7 +508,7 @@ class TestAzureService(unittest.TestCase):
 
         mock_get_obj.assert_called_once_with(
             container=self.md.container,
-            name=self.md.image_name,
+            name=self.md.object_name,
         )
         mock_filter_by_tags.assert_called_once_with(self.md.tags)
         mock_upload.assert_called_once_with(
@@ -532,7 +532,7 @@ class TestAzureService(unittest.TestCase):
         mock_get_obj.side_effect = [None, mock_blob]
         mock_filter_by_tags.return_value = mock_filtered
         calls = [
-            call(container=self.md.container, name=self.md.image_name),
+            call(container=self.md.container, name=self.md.object_name),
             call(container=self.md.container, name=self.md.object_name),
         ]
 
@@ -560,7 +560,7 @@ class TestAzureService(unittest.TestCase):
 
         mock_get_obj.assert_called_once_with(
             container=self.md.container,
-            name=self.md.image_name
+            name=self.md.object_name
         )
         mock_filter_by_tags.assert_not_called()
         mock_upload.assert_not_called()
