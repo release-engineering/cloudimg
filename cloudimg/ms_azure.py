@@ -400,7 +400,11 @@ class AzureService(BaseService):
                     container_client.container_name
                 )
             )
-            return
+            filtered = self.filter_object_by_tags(tags)
+            return self.get_object_by_name(
+                        container=filtered.container_name,
+                        name=filtered.name,
+                   )
 
         # Upload to container and tag image
         blob_client = container_client.get_blob_client(blob=object_name)
@@ -410,7 +414,10 @@ class AzureService(BaseService):
                 object_name,
                 container_name,
             )
-            return
+            return self.get_object_by_name(
+                        container=container_name,
+                        name=object_name,
+                   )
 
         log.info('Uploading %s to container %s', image_path, container_name)
         log.info('Uploading %s with name %s', image_path, object_name)

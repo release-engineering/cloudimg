@@ -393,16 +393,24 @@ class TestAzureService(unittest.TestCase):
         self.assertEqual(res.total, total)
         self.assertEqual(res.percentage, current / total * 100)
 
+    @patch('cloudimg.ms_azure.AzureService.get_object_by_name')
+    @patch('cloudimg.ms_azure.AzureService.filter_object_by_tags')
     @patch('cloudimg.ms_azure.AzureService.are_tags_present')
     @patch('cloudimg.ms_azure.AzureService.get_container_by_name')
     def test_upload_to_container_tag_already_present(self,
                                                      mock_get,
-                                                     mock_are_tags):
+                                                     mock_are_tags,
+                                                     mock_filter_obj,
+                                                     mock_get_obj_name,
+                                                     ):
         mock_blob = MagicMock()
         mock_cc = MagicMock()
         mock_cc.get_blob_client = mock_blob
         mock_get.return_value = mock_cc
         mock_are_tags.return_value = True
+        mock_filter_obj.return_value = MagicMock()
+        mock_filter_obj.return_value.container_name = self.md.container
+        mock_filter_obj.return_value.name = self.md.object_name
         upload_progress = UploadProgress(current=0, total=0)
 
         res = self.svc.upload_to_container(
@@ -412,18 +420,25 @@ class TestAzureService(unittest.TestCase):
             tags=self.md.tags,
         )
 
+        mock_filter_obj.assert_called_once_with(self.md.tags)
+        mock_get_obj_name.assert_called_once_with(
+            container=self.md.container,
+            name=self.md.object_name,
+        )
         mock_get.assert_called_once_with(name=self.md.container, create=True)
         mock_are_tags.assert_called_once_with(mock_cc, self.md.tags)
         mock_cc.get_blob_client.assert_not_called()
         mock_blob.exists.assert_not_called()
         self.assertEqual(self.svc._upload_progress, upload_progress)
-        self.assertIsNone(res)
+        assert res
 
+    @patch('cloudimg.ms_azure.AzureService.get_object_by_name')
     @patch('cloudimg.ms_azure.AzureService.are_tags_present')
     @patch('cloudimg.ms_azure.AzureService.get_container_by_name')
     def test_upload_to_container_blob_already_present(self,
                                                       mock_get,
-                                                      mock_are_tags):
+                                                      mock_are_tags,
+                                                      mock_get_obj_name):
         mock_blob = MagicMock()
         mock_blob.exists.return_value = True
         mock_cc = MagicMock()
@@ -439,6 +454,10 @@ class TestAzureService(unittest.TestCase):
             tags=self.md.tags,
         )
 
+        mock_get_obj_name.assert_called_once_with(
+            container=self.md.container,
+            name=self.md.object_name,
+        )
         mock_get.assert_called_once_with(name=self.md.container, create=True)
         mock_are_tags.assert_called_once_with(mock_cc, self.md.tags)
         mock_cc.get_blob_client.assert_called_once_with(
@@ -446,7 +465,7 @@ class TestAzureService(unittest.TestCase):
         )
         mock_blob.exists.assert_called_once()
         self.assertEqual(self.svc._upload_progress, upload_progress)
-        self.assertIsNone(res)
+        assert res
 
     @patch('cloudimg.ms_azure.AzureService.upload_callback')
     @patch('cloudimg.ms_azure.AzureService.are_tags_present')
