@@ -17,7 +17,7 @@ from azure.storage.blob import (
     ResourceTypes,
 )
 
-from cloudimg.common import BaseService, PublishingMetadata
+from cloudimg.common import BaseService, DeleteMetadata, PublishingMetadata
 
 log = logging.getLogger(__name__)
 
@@ -123,6 +123,20 @@ class AzurePublishingMetadata(PublishingMetadata):
 
         assert self.container, 'A container must be defined'
         assert self.tags, 'A tag must be defined'
+
+
+class AzureDeleteMetadata(DeleteMetadata):
+    """The required information to delete a blob on Azure."""
+
+    def __init__(self, container, *args, **kwargs):
+        # Set the image NAME as the ID for Azure as both are redundant
+        # for this marketplace.
+        if not kwargs.get("image_name"):
+            kwargs.update({"image_name": kwargs.get("image_id")})
+
+        super(AzureDeleteMetadata, self).__init__(*args, **kwargs)
+
+        self.container = container
 
 
 class AzureService(BaseService):
@@ -558,3 +572,33 @@ class AzureService(BaseService):
             raise BlobNotFoundError(err)
 
         return blob.set_blob_tags(tags)
+
+    def delete(self, metadata):
+        """
+        Delete VHD images for given metadata.
+
+        Args:
+            metadata(AzureDeleteMetadata): Metadata about the image
+
+        Returns:
+            tuple (image_name[Str], image_path[Str]) of removed objects.
+        """
+        image_name = metadata.image_name
+
+        log.info('Searching for image: %s', image_name)
+        blob = self.get_object_by_name(
+            container=metadata.container,
+            name=image_name
+        )
+
+        if not blob:
+            log.info('Image does not exist: %s', image_name)
+            return None, None
+
+        image_path = "%s/%s" % (blob.container_name, blob.blob_name)
+        log.info("Deleting the image from %s", image_path)
+        # https://learn.microsoft.com/en-us/python/api/azure-storage-blob/azure.storage.blob.blobclient?view=azure-python#azure-storage-blob-blobclient-delete-blob
+        blob.delete_blob(delete_snapshots="include")
+
+        log.info("Deleted the image from %s", image_path)
+        return image_name, image_path

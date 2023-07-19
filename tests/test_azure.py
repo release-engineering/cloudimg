@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch, call, ANY
 
 from cloudimg.ms_azure import (
+    AzureDeleteMetadata,
     AzurePublishingMetadata,
     AzureService,
     BlobNotFoundError,
@@ -644,6 +645,66 @@ class TestAzureService(unittest.TestCase):
             container='foo',
             name='bar',
         )
+
+    @patch("cloudimg.ms_azure.AzureService.get_object_by_name")
+    def test_delete_image_exists(self, mock_get_obj):
+        image_name = "fake_image_name"
+        container_name = "fake_container_name"
+        mock_blob = MagicMock()
+        mock_blob.container_name = container_name
+        mock_blob.blob_name = image_name
+        mock_get_obj.return_value = mock_blob
+
+        delete_meta = AzureDeleteMetadata(
+            image_id=image_name,
+            container=container_name,
+        )
+
+        # run delete
+        deleted_img_name, deleted_img_path = self.svc.delete(delete_meta)
+
+        # Ensure the metadata's `image_name` and `image_id` are the same
+        assert delete_meta.image_id == delete_meta.image_name
+
+        # Ensure the calls were properly made
+        mock_get_obj.assert_called_once_with(
+            container=container_name,
+            name=image_name,
+        )
+        mock_blob.delete_blob.assert_called_once_with(
+            delete_snapshots="include",
+        )
+
+        # Ensure the return is the expected ones
+        assert deleted_img_name == image_name
+        assert deleted_img_path == "%s/%s" % (container_name, image_name)
+
+    @patch("cloudimg.ms_azure.AzureService.get_object_by_name")
+    def test_delete_image_missing(self, mock_get_obj):
+        image_name = "fake_image_name"
+        container_name = "fake_container_name"
+        mock_get_obj.return_value = None
+
+        delete_meta = AzureDeleteMetadata(
+            image_id=image_name,
+            container=container_name,
+        )
+
+        # run delete
+        deleted_img_name, deleted_img_path = self.svc.delete(delete_meta)
+
+        # Ensure the metadata's `image_name` and `image_id` are the same
+        assert delete_meta.image_id == delete_meta.image_name
+
+        # Ensure the calls were properly made
+        mock_get_obj.assert_called_once_with(
+            container=container_name,
+            name=image_name,
+        )
+
+        # Ensure the return is the expected ones
+        assert not deleted_img_name
+        assert not deleted_img_path
 
 
 if __name__ == '__main__':
