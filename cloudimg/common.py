@@ -22,6 +22,7 @@ class PublishingMetadata(object):
         virt_type (str, optional): Ex. hvm, paravirtual
         root_device_name (str, optional): Ex. /dev/sda1
         volume_type (str, optional): Ex. standard, gp2
+        uefi_support (Bool, optional): Whether the image supports UEFI boot
         accounts (list, optional): Accounts which will have permission to use
                                    the image
         groups (list, optional): Groups which will have permission to use the
@@ -35,7 +36,7 @@ class PublishingMetadata(object):
                  container=None, arch=None, virt_type=None,
                  root_device_name=None, volume_type=None,
                  accounts=[], groups=[], snapshot_name=None,
-                 snapshot_account_ids=None, tags=None):
+                 snapshot_account_ids=None, tags=None, uefi_support=None):
         self.image_path = image_path
         self.image_name = image_name
         self.snapshot_name = snapshot_name or self._default_snapshot_name
@@ -46,6 +47,7 @@ class PublishingMetadata(object):
         self.virt_type = virt_type
         self.root_device_name = root_device_name
         self.volume_type = volume_type
+        self.uefi_support = uefi_support
         self.accounts = accounts
         self.groups = groups
         self.tags = tags
