@@ -49,6 +49,10 @@ class AWSPublishingMetadata(PublishingMetadata):
 
         super(AWSPublishingMetadata, self).__init__(*args, **kwargs)
 
+        # Convert uefi_support bool into AWS specific values
+        self.boot_mode = "uefi-preferred" if self.uefi_support \
+            else "legacy-bios"
+
         assert self.container, 'A container must be defined'
 
 
@@ -642,7 +646,8 @@ class AWSService(BaseService):
             BlockDeviceMappings=block_device_mapping,
             EnaSupport=metadata.ena_support,
             SriovNetSupport=metadata.sriov_net_support,
-            BillingProducts=metadata.billing_products
+            BillingProducts=metadata.billing_products,
+            BootMode=metadata.boot_mode
         )
         if metadata.tags:
             self.tag_image(image, metadata.tags)

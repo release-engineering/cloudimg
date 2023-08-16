@@ -611,7 +611,8 @@ class TestAWSService(unittest.TestCase):
             BlockDeviceMappings=block_device_mapping,
             EnaSupport=self.md.ena_support,
             SriovNetSupport=self.md.sriov_net_support,
-            BillingProducts=self.md.billing_products
+            BillingProducts=self.md.billing_products,
+            BootMode=self.md.boot_mode
         )
         tag_image.assert_not_called()
         self.assertEqual(res, "fakeimg")
