@@ -1,3 +1,4 @@
+import enum
 import logging
 import os
 import threading
@@ -27,6 +28,22 @@ class SnapshotTimeout(Exception):
     pass
 
 
+class AWSBootMode(enum.Enum):
+    """The boot mode options supported by AWS when registering an AMI."""
+
+    uefi = "uefi"
+    """Support UEFI only."""
+
+    bios = "legacy-bios"
+    """Support BIOS only."""
+
+    hybrid = "uefi-preferred"
+    """Support UEFI and BIOS giving the preference to UEFI."""
+
+    not_set = None
+    """Use the default boot mode from AWS."""
+
+
 class AWSPublishingMetadata(PublishingMetadata):
     """
     A collection of metadata necessary for uploading and publishing a disk
@@ -40,18 +57,26 @@ class AWSPublishingMetadata(PublishingMetadata):
                                            interfaces. By default this option
                                            is enabled.
         billing_products (list, optional): Billing product identifiers
+
+        boot_mode (str, optional): The boot mode for booting up the AMI on EC2.
     """
 
     def __init__(self, *args, **kwargs):
         self.ena_support = kwargs.pop('ena_support', True)
         self.sriov_net_support = kwargs.pop('sriov_net_support', 'simple')
         self.billing_products = kwargs.pop('billing_products', None)
+        bmode_str = kwargs.pop('boot_mode', None) or "not_set"
+        self.boot_mode = AWSBootMode[bmode_str]
 
         super(AWSPublishingMetadata, self).__init__(*args, **kwargs)
 
-        # Convert uefi_support bool into AWS specific values
-        self.boot_mode = "uefi-preferred" if self.uefi_support \
-            else "legacy-bios"
+        # Set the UEFI mode when the boolean is used instead of Enum.
+        if (
+            self.boot_mode == AWSBootMode.not_set and
+            self.uefi_support is not None
+        ):
+            self.boot_mode = AWSBootMode.hybrid if self.uefi_support \
+                             else AWSBootMode.bios
 
         assert self.container, 'A container must be defined'
 
@@ -636,6 +661,15 @@ class AWSService(BaseService):
             },
         }]
 
+        # Here we just set the "BootMode" whenever we have a proper
+        # value for it. Otherwise we leave it so AWS will use the
+        # instance type default.
+        #
+        # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ami-boot.html
+        optional_kwargs = {}
+        if metadata.boot_mode != AWSBootMode.not_set:
+            optional_kwargs["BootMode"] = metadata.boot_mode.value
+
         log.info('Registering image: %s', metadata.image_name)
         image = self.ec2.register_image(
             Name=metadata.image_name,
@@ -647,7 +681,7 @@ class AWSService(BaseService):
             EnaSupport=metadata.ena_support,
             SriovNetSupport=metadata.sriov_net_support,
             BillingProducts=metadata.billing_products,
-            BootMode=metadata.boot_mode
+            **optional_kwargs,
         )
         if metadata.tags:
             self.tag_image(image, metadata.tags)

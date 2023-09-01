@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from cloudimg.aws import (
-    AWSService, AWSPublishingMetadata, ClientError,
+    AWSBootMode, AWSService, AWSPublishingMetadata, ClientError,
     SnapshotError, SnapshotTimeout, AWSDeleteMetadata, UploadProgress
 )
 
@@ -612,7 +612,6 @@ class TestAWSService(unittest.TestCase):
             EnaSupport=self.md.ena_support,
             SriovNetSupport=self.md.sriov_net_support,
             BillingProducts=self.md.billing_products,
-            BootMode=self.md.boot_mode
         )
         tag_image.assert_not_called()
         self.assertEqual(res, "fakeimg")
@@ -627,6 +626,88 @@ class TestAWSService(unittest.TestCase):
         self.mock_register_image.assert_called_once()
         tag_image.assert_called_once_with("fakeimg", self.md.tags)
         self.assertEqual(res, "fakeimg")
+
+    @patch('cloudimg.aws.AWSService.tag_image')
+    def test_register_image_boot_mode(self, tag_image):
+        self.mock_register_image.return_value = "fakeimg"
+        boot_modes = ["uefi", "bios", "hybrid"]
+
+        for bmode in boot_modes:
+            self.md.boot_mode = AWSBootMode[bmode]
+            mock_snapshot = MagicMock()
+            mock_snapshot.id = 'foo'
+            block_device_mapping = [{
+                'DeviceName': self.md.root_device_name,
+                'Ebs': {
+                    'SnapshotId': mock_snapshot.id,
+                    'VolumeType': self.md.volume_type,
+                    'DeleteOnTermination': True,
+                },
+            }]
+
+            res = self.svc.register_image(mock_snapshot, self.md)
+
+            self.mock_register_image.assert_called_once_with(
+                Name=self.md.image_name,
+                Description=self.md.description,
+                Architecture=self.md.arch,
+                VirtualizationType=self.md.virt_type,
+                RootDeviceName=self.md.root_device_name,
+                BlockDeviceMappings=block_device_mapping,
+                EnaSupport=self.md.ena_support,
+                SriovNetSupport=self.md.sriov_net_support,
+                BillingProducts=self.md.billing_products,
+                BootMode=AWSBootMode[bmode].value
+            )
+            tag_image.assert_not_called()
+            self.assertEqual(res, "fakeimg")
+            self.mock_register_image.reset_mock()
+            tag_image.reset_mock()
+
+    @patch('cloudimg.aws.AWSService.tag_image')
+    def test_register_image_uefi_support_bool(self, tag_image):
+        self.mock_register_image.return_value = "fakeimg"
+        uefi_support_map = {
+            True: AWSBootMode.hybrid,
+            False: AWSBootMode.bios,
+        }
+
+        for bool_value, b_mode in uefi_support_map.items():
+            self.md = AWSPublishingMetadata(
+                image_path='/some/fake/path/to/image.raw',
+                image_name='fakeimagename',
+                container='fakecontainername',
+                uefi_support=bool_value,
+            )
+            mock_snapshot = MagicMock()
+            mock_snapshot.id = 'foo'
+            block_device_mapping = [{
+                'DeviceName': self.md.root_device_name,
+                'Ebs': {
+                    'SnapshotId': mock_snapshot.id,
+                    'VolumeType': self.md.volume_type,
+                    'DeleteOnTermination': True,
+                },
+            }]
+
+            res = self.svc.register_image(mock_snapshot, self.md)
+
+            self.mock_register_image.assert_called_once_with(
+                Name=self.md.image_name,
+                Description=self.md.description,
+                Architecture=self.md.arch,
+                VirtualizationType=self.md.virt_type,
+                RootDeviceName=self.md.root_device_name,
+                BlockDeviceMappings=block_device_mapping,
+                EnaSupport=self.md.ena_support,
+                SriovNetSupport=self.md.sriov_net_support,
+                BillingProducts=self.md.billing_products,
+                BootMode=b_mode.value,
+            )
+            tag_image.assert_not_called()
+            self.assertEqual(res, "fakeimg")
+            self.mock_register_image.reset_mock()
+            tag_image.reset_mock()
 
     def test_deregister_image(self):
         image = MagicMock()
