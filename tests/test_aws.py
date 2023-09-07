@@ -630,7 +630,7 @@ class TestAWSService(unittest.TestCase):
     @patch('cloudimg.aws.AWSService.tag_image')
     def test_register_image_boot_mode(self, tag_image):
         self.mock_register_image.return_value = "fakeimg"
-        boot_modes = ["uefi", "bios", "hybrid"]
+        boot_modes = ["uefi", "legacy", "hybrid"]
 
         for bmode in boot_modes:
             self.md.boot_mode = AWSBootMode[bmode]
@@ -669,7 +669,7 @@ class TestAWSService(unittest.TestCase):
         self.mock_register_image.return_value = "fakeimg"
         uefi_support_map = {
             True: AWSBootMode.hybrid,
-            False: AWSBootMode.bios,
+            False: AWSBootMode.legacy,
         }
 
         for bool_value, b_mode in uefi_support_map.items():

@@ -34,7 +34,7 @@ class AWSBootMode(enum.Enum):
     uefi = "uefi"
     """Support UEFI only."""
 
-    bios = "legacy-bios"
+    legacy = "legacy-bios"
     """Support BIOS only."""
 
     hybrid = "uefi-preferred"
@@ -76,7 +76,7 @@ class AWSPublishingMetadata(PublishingMetadata):
             self.uefi_support is not None
         ):
             self.boot_mode = AWSBootMode.hybrid if self.uefi_support \
-                             else AWSBootMode.bios
+                             else AWSBootMode.legacy
 
         assert self.container, 'A container must be defined'
 
