@@ -418,7 +418,7 @@ class AWSService(BaseService):
         return container
 
     def upload_to_container(self, image_path, container_name, object_name,
-                            chunk_size=CHUNK_SIZE):
+                            chunk_size=CHUNK_SIZE, tags=None):
         """
         Uploads an image to a storage container. If the image is a remote URL,
         it will be streamed in chunks. If the file is a compressed .xz file
@@ -430,6 +430,8 @@ class AWSService(BaseService):
             container_name (str): The container to upload to
             object_name (str): The uploaded file name
             chunk_size (int, optional): Size for HTTP stream chunks
+            tags (dict, optional): Dictionary of keyword elements to be
+            applied as tags on uploaded S3 image.
 
         Returns:
             An S3 Object
@@ -484,6 +486,9 @@ class AWSService(BaseService):
 
         log.info('Successfully uploaded %s', image_path)
 
+        if tags:
+            self.tag_s3_object(container_name, object_name, tags)
+
         return obj
 
     def publish(self, metadata):
@@ -520,15 +525,23 @@ class AWSService(BaseService):
                 obj = self.get_object_by_name(metadata.container,
                                               metadata.object_name)
 
+                # Set tags when they're provided
+                extra_kwargs = {}
+                if metadata.tags:
+                    extra_kwargs.update({"tags": metadata.tags})
+
                 if not obj:
                     log.info('Object does not exist: %s', metadata.object_name)
                     obj = self.upload_to_container(metadata.image_path,
                                                    metadata.container,
-                                                   metadata.object_name)
+                                                   metadata.object_name,
+                                                   **extra_kwargs)
                 else:
                     log.info('Object already exists')
 
-                snapshot = self.import_snapshot(obj, metadata.snapshot_name)
+                snapshot = self.import_snapshot(obj,
+                                                metadata.snapshot_name,
+                                                **extra_kwargs)
                 self.share_snapshot(snapshot, metadata.snapshot_name,
                                     metadata.snapshot_account_ids)
             else:
@@ -547,17 +560,20 @@ class AWSService(BaseService):
 
         return image
 
-    def import_snapshot(self, obj, snapshot_name):
+    def import_snapshot(self, obj, snapshot_name, tags=None):
         """
         Imports a disk image as a snapshot.
 
         Args:
             obj (Object): An S3 Object to import from
             snapshot_name (str): The name of the new snapshot
+            tags (dict, optional): Dictionary of keyword elements to be
+            applied as tags on imported snapshot.
 
         Returns:
             An EC2 Snapshot
         """
+        tags = tags or {}
         source = '%s/%s' % (obj.bucket_name, obj.key)
         description = 'cloudimg import of %s' % source
 
@@ -586,12 +602,8 @@ class AWSService(BaseService):
                  snapshot.id, snapshot_name)
 
         # Set the name of the snapshot so we may be able to look it up later
-        snapshot.create_tags(
-            Tags=[{
-                'Key': 'Name',
-                'Value': snapshot_name,
-            }]
-        )
+        tags.update({"Name": snapshot_name})
+        self.tag_snapshot(snapshot, tags)
 
         return snapshot
 
@@ -733,6 +745,48 @@ class AWSService(BaseService):
         }
         snapshot.modify_attribute(**attrs)
 
+    def tag_s3_object(self, container_name, object_name, tags):
+        """
+        Apply the corresponding tags to an existing S3 Object.
+
+        Args:
+            container_name (str): the name of the S3 bucket
+            object_name (str): the object name inside S3 bucket
+            tags (dict): Dictionary with the tags to apply
+        Returns:
+            dict with the versionId of the object the tag-set was added to.
+        """
+        log.info("Applying tags for object %s/%s: %s",
+                 container_name, object_name, tags)
+        res = self.s3.meta.client.put_object_tagging(
+            Bucket=container_name,
+            Key=object_name,
+            Tagging={
+                "TagSet": self._get_tagdict(tags)
+            },
+            RequestPayer='requester',
+        )
+        log.debug("Tag object \"%s/%s\" results: %s",
+                  container_name, object_name, res)
+        return res
+
+    def tag_snapshot(self, snapshot, tags):
+        """
+        Apply the corresponding tags to a snapshot.
+
+        Args:
+            snapshot (Snapshot): The snapshot to apply the tags
+            tags (dict): Dictionary with the tags to apply
+        Returns:
+            A list of tag resources
+        """
+        log.info("Applying tags for snapshot %s: %s", snapshot.id, tags)
+        res = snapshot.create_tags(
+            Tags=self._get_tagdict(tags)
+        )
+        log.debug("Tag snapshot \"%s\" results: %s", snapshot.id, res)
+        return res
+
     def tag_image(self, image, tags):
         """
         Apply the corresponding tags to an image
@@ -749,12 +803,7 @@ class AWSService(BaseService):
         # AWS expects a list of dicionaries for each tag
         attrs = {
             'DryRun': False,
-            'Tags': [
-                {
-                    "Key": k,
-                    "Value": v,
-                } for k, v in tags.items()
-            ],
+            'Tags': self._get_tagdict(tags)
         }
         res = image.create_tags(**attrs)
         log.debug("Tag image \"%s\" results: %s", image.name, res)
@@ -854,3 +903,12 @@ class AWSService(BaseService):
                 deleted_snapshot_id = self.delete_snapshot(snapshot)
 
         return deleted_image_id, deleted_snapshot_id
+
+    @staticmethod
+    def _get_tagdict(tags):
+        return [
+            {
+                "Key": k,
+                "Value": v,
+            } for k, v in tags.items()
+        ]
