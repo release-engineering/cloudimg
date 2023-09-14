@@ -2,7 +2,7 @@ from copy import deepcopy
 from tempfile import NamedTemporaryFile
 import unittest
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from cloudimg.aws import (
     AWSBootMode, AWSService, AWSPublishingMetadata, ClientError,
@@ -82,6 +82,8 @@ class TestAWSService(unittest.TestCase):
         self.mock_bucket = patch.object(self.svc.s3, 'Bucket').start()
         self.mock_register_image = \
             patch.object(self.svc.ec2, 'register_image').start()
+        self.mock_put_object_tagging = \
+            patch.object(s3_client, 'put_object_tagging').start()
 
     def test_init_upload_service(self):
         upload_svc = UploadProgress("fake_container", "fake_object")
@@ -318,6 +320,24 @@ class TestAWSService(unittest.TestCase):
         self.assertEqual(self.mock_upload_fileobj.call_count, 1)
         self.assertEqual(obj, result)
 
+    @patch('cloudimg.aws.AWSService.tag_s3_object')
+    @patch('cloudimg.aws.UploadProgress')
+    def test_upload_to_container_tags(self, mock_callback, mock_tag_s3):
+        obj = self.mock_object.return_value = MagicMock()
+        tags = {"foo": "bar"}
+
+        result = self.svc.upload_to_container(self.md.image_path,
+                                              self.md.container,
+                                              self.md.object_name,
+                                              tags=tags)
+
+        mock_tag_s3.assert_called_once_with(self.md.container,
+                                            self.md.object_name,
+                                            tags)
+        self.assertEqual(self.mock_upload_file.call_count, 1)
+        self.assertEqual(self.mock_upload_fileobj.call_count, 0)
+        self.assertEqual(obj, result)
+
     def test_share_image(self):
         accounts = ['account1', 'account2']
         groups = ['group1', 'group2']
@@ -385,6 +405,28 @@ class TestAWSService(unittest.TestCase):
         kwargs = self.mock_import_snapshot.call_args[1]
         self.assertTrue('RoleName' in kwargs)
         self.assertEqual(kwargs['RoleName'], 'fake-role')
+
+    @patch('cloudimg.aws.AWSService.tag_snapshot')
+    @patch('cloudimg.aws.AWSService.wait_for_import_snapshot_task')
+    def test_import_snapshot_tags(self, mock_wait, mock_tag_snapshot):
+        snapshot = mock_wait.return_value = MagicMock()
+        obj = MagicMock()
+        tags = {"foo": "bar"}
+
+        result = self.svc.import_snapshot(obj,
+                                          self.md.snapshot_name,
+                                          tags=tags)
+
+        mock_tag_snapshot.assert_called_once_with(
+            snapshot,
+            {
+                "Name": self.md.snapshot_name,
+                **tags,
+            }
+        )
+        self.assertEqual(snapshot, result)
+        self.assertEqual(self.mock_import_snapshot.call_count, 1)
+        self.assertFalse('RoleName' in self.mock_import_snapshot.call_args[1])
 
     def test_wait_for_import_snapshot_task(self):
         task = {
@@ -585,6 +627,45 @@ class TestAWSService(unittest.TestCase):
         upload_to_container.assert_called_once_with(self.md.image_path,
                                                     self.md.container,
                                                     self.md.object_name)
+
+    @patch('cloudimg.aws.AWSService.upload_to_container')
+    @patch('cloudimg.aws.AWSService.import_snapshot')
+    @patch('cloudimg.aws.AWSService.register_image')
+    @patch('cloudimg.aws.AWSService.share_image')
+    @patch('cloudimg.aws.AWSService.get_image_by_tags')
+    @patch('cloudimg.aws.AWSService.get_image_by_name')
+    @patch('cloudimg.aws.AWSService.get_snapshot_by_name')
+    @patch('cloudimg.aws.AWSService.get_object_by_name')
+    def test_publish_tags(self,
+                          get_object_by_name,
+                          get_snapshot_by_name,
+                          get_image_by_name,
+                          get_image_by_tags,
+                          share_image,
+                          register_image,
+                          import_snapshot,
+                          upload_to_container):
+        get_image_by_name.return_value = None
+        get_image_by_tags.return_value = None
+        get_snapshot_by_name.return_value = None
+        get_object_by_name.return_value = None
+        tags = {"foo": "bar"}
+        self.md.tags = tags
+        published = self.svc.publish(self.md)
+
+        share_image.assert_called_once_with(published,
+                                            accounts=[],
+                                            groups=[])
+        self.assertEqual(register_image.call_count, 1)
+        import_snapshot.assert_called_once_with(
+            ANY,
+            self.md.snapshot_name,
+            tags=tags,
+        )
+        upload_to_container.assert_called_once_with(self.md.image_path,
+                                                    self.md.container,
+                                                    self.md.object_name,
+                                                    tags=tags)
 
     @patch('cloudimg.aws.AWSService.tag_image')
     def test_register_image_no_tags(self, tag_image):
@@ -959,6 +1040,23 @@ class TestAWSService(unittest.TestCase):
         image = self.svc.get_image_by_tags(tags)
         assert image == "fake_image"
         get_image_by_filters.assert_called_once_with(filters_call)
+
+    def test_tag_s3_object(self):
+        self.svc.tag_s3_object("fake-s3", "fake-object", tags={"foo": "bar"})
+
+        self.mock_put_object_tagging.assert_called_once_with(
+            Bucket="fake-s3",
+            Key="fake-object",
+            Tagging={
+                "TagSet": [
+                    {
+                        "Key": "foo",
+                        "Value": "bar",
+                    }
+                ]
+            },
+            RequestPayer="requester",
+        )
 
     def test_tag_image(self):
         class fake_image_class:
