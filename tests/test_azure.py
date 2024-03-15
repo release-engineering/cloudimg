@@ -13,6 +13,8 @@ from cloudimg.ms_azure import (
     UploadProgress,
 )
 
+from azure.core.exceptions import AzureError
+
 
 class TestAzurePublishingMetadata(unittest.TestCase):
 
@@ -513,6 +515,84 @@ class TestAzureService(unittest.TestCase):
         )
         mock_callback.assert_called_once()
         self.assertEqual(res, mock_blob)
+
+    @patch("cloudimg.ms_azure.AzureService.are_tags_present")
+    @patch("cloudimg.ms_azure.AzureService.get_container_by_name")
+    def test_copy_to_container_failed(
+        self,
+        mock_get_container_by_name,
+        mock_are_tags_present,
+    ):
+        mock_blob_client = MagicMock()
+        mock_blob_client.exists.return_value = False
+        mock_container_client = MagicMock()
+        mock_container_client.get_blob_client.return_value = mock_blob_client
+        mock_get_container_by_name.return_value = mock_container_client
+        mock_are_tags_present.return_value = False
+
+        mock_blob_client.get_blob_properties.side_effect = [
+            {"copy": {"status": "Pending", "progress": "0/3"}},
+            {"copy": {"status": "Pending", "progress": "1/3"}},
+            {"copy": {"status": "Pending", "progress": "2/3"}},
+        ]
+        with self.assertRaises(AzureError) as context:
+            with patch("time.sleep", return_value=0) as mock_sleep:
+                self.svc.upload_to_container(
+                    image_path="https://example.com/rhcos-azure.x86_64.vhd",
+                    container_name=self.md.container,
+                    object_name=self.md.object_name,
+                    tags=self.md.tags,
+                )
+        self.assertTrue("RetryError" in str(context.exception))
+        mock_blob_client.exists.assert_called_once()
+        assert mock_sleep.call_count == 59
+        mock_blob_client.start_copy_from_url.assert_called_once_with(
+            source_url="https://example.com/rhcos-azure.x86_64.vhd",
+            metadata={},
+            incremental_copy=False)
+
+        mock_are_tags_present.assert_called_once_with(
+            mock_container_client, self.md.tags
+            )
+
+    @patch("cloudimg.ms_azure.AzureService.are_tags_present")
+    @patch("cloudimg.ms_azure.AzureService.get_container_by_name")
+    def test_copy_to_container_from_url(
+        self,
+        mock_get_container_by_name,
+        mock_are_tags_present,
+    ):
+        mock_blob_client = MagicMock()
+        mock_blob_client.exists.return_value = False
+        mock_container_client = MagicMock()
+        mock_container_client.get_blob_client.return_value = mock_blob_client
+        mock_get_container_by_name.return_value = mock_container_client
+        mock_are_tags_present.return_value = False
+
+        mock_blob_client.get_blob_properties.side_effect = [
+            {"copy": {"status": "Pending", "progress": "0/2"}},
+            {"copy": {"status": "Pending", "progress": "1/2"}},
+            {"copy": {"status": "success", "progress": "2/2"}},
+        ]
+        with patch("time.sleep", return_value=0) as mock_sleep:
+            res = self.svc.upload_to_container(
+                image_path="https://example.com/rhcos-azure.x86_64.vhd",
+                container_name=self.md.container,
+                object_name=self.md.object_name,
+                tags=self.md.tags,
+            )
+
+        mock_blob_client.exists.assert_called_once()
+        assert mock_sleep.call_count == 2
+        mock_blob_client.start_copy_from_url.assert_called_once_with(
+            source_url="https://example.com/rhcos-azure.x86_64.vhd",
+            metadata={},
+            incremental_copy=False)
+
+        mock_are_tags_present.assert_called_once_with(
+            mock_container_client, self.md.tags
+            )
+        self.assertEqual(res, mock_blob_client)
 
     @patch('cloudimg.ms_azure.AzureService.upload_to_container')
     @patch('cloudimg.ms_azure.AzureService.filter_object_by_tags')

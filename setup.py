@@ -27,5 +27,6 @@ setup(
         'boto3',
         'monotonic; python_version < \'3.3\'',
         'requests',
+        "tenacity",
     ]
 )
