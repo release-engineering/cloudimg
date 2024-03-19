@@ -4,9 +4,18 @@ import lzma
 import os
 
 from time import monotonic
+from urllib.parse import urlparse
 
 import attr
+from tenacity import (
+    Retrying,
+    stop_after_attempt,
+    retry_if_not_result,
+    stop_after_delay,
+    wait_fixed,
+)
 
+from azure.core.exceptions import AzureError
 from azure.storage.blob import (
     AccountSasPermissions,
     BlobServiceClient,
@@ -354,6 +363,46 @@ class AzureService(BaseService):
 
         return self._upload_progress
 
+    def _get_blob_copy_status(self, blob_client):
+        """
+        Wait  and confirm till the copy of blob from url is completed.
+
+        Args:
+            blob_client : Blob client which initiated the copy process.
+        Returns:
+            Upload blob client on success
+        Raises:
+            AzureError on upload failure.
+        """
+        get_copy_progess = (
+            lambda uploaded, total: (int(uploaded) / int(total))*100
+        )
+
+        try:
+            copy_status = (
+                lambda blob_properties:
+                blob_properties["copy"]["status"] == "success"
+            )
+            for attempt in Retrying(
+                stop=stop_after_attempt(60) | stop_after_delay(600),
+                retry=retry_if_not_result(copy_status),
+                wait=wait_fixed(10),
+            ):
+                with attempt:
+                    blob_properties = blob_client.get_blob_properties()
+                attempt.retry_state.set_result(blob_properties)
+                copy_status = blob_properties["copy"]["status"]
+                copy_progress = round(
+                    get_copy_progess(
+                        *blob_properties["copy"]["progress"].split("/")), 2
+                )
+                log.info(f"Copying in progress : {copy_progress} %")
+            return blob_client
+        except Exception as e:
+            log.error(
+                f"Unable to confirm if the blob was copied successfully: {e}")
+            raise AzureError(e)
+
     def upload_to_container(self, image_path, container_name, object_name,
                             tags, **kwargs):
         """
@@ -383,7 +432,7 @@ class AzureService(BaseService):
             "raw_response_hook": self.upload_callback,
         }
         for k, v in upload_default_args.items():
-            kwargs.setdefault(k, v)
+            kwargs.setdefault(k, v)  # noqa: E731
 
         # Setup the destination container
         container_client = self.get_container_by_name(
@@ -432,6 +481,17 @@ class AzureService(BaseService):
                         container=container_name,
                         name=object_name,
                    )
+
+        is_image_path_an_url = lambda urlparse_result: all(     # noqa: E731
+            [urlparse_result.scheme, urlparse_result.netloc]
+        )
+
+        if is_image_path_an_url(urlparse(image_path)):
+            log.info('Copying %s to container %s', image_path, container_name)
+            blob_client.start_copy_from_url(
+                source_url=image_path, metadata={}, incremental_copy=False
+            )
+            return self._get_blob_copy_status(blob_client)
 
         log.info('Uploading %s to container %s', image_path, container_name)
         log.info('Uploading %s with name %s', image_path, object_name)
