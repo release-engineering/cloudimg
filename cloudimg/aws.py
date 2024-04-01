@@ -1,4 +1,5 @@
 import enum
+import functools
 import logging
 import os
 import threading
@@ -42,6 +43,29 @@ class AWSBootMode(enum.Enum):
 
     not_set = None
     """Use the default boot mode from AWS."""
+
+
+def log_request_id(func):
+    """
+    The AWS request ID is useful when troubleshooting errors. When a
+    botocore.exceptions.ClientError error is raised, attempt to log the
+    request ID associated with the error.
+
+    https://boto3.amazonaws.com/v1/documentation/api/latest/guide/error-handling.html#catching-exceptions-when-using-a-low-level-client
+    """
+    @functools.wraps(func)
+    def log_request_id_wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ClientError as exc:
+            if exc.response.get("ResponseMetadata") and \
+                    exc.response['ResponseMetadata'].get('RequestId'):
+                log.exception(
+                    "An error occurred in AWS (AWS RequestId: %s)",
+                    exc.response['ResponseMetadata']['RequestId']
+                )
+            raise
+    return log_request_id_wrapper
 
 
 class AWSPublishingMetadata(PublishingMetadata):
@@ -491,6 +515,7 @@ class AWSService(BaseService):
 
         return obj
 
+    @log_request_id
     def publish(self, metadata):
         """
         Takes some metadata about a raw disk image, imports it into AWS and
@@ -848,6 +873,7 @@ class AWSService(BaseService):
 
         return snapshot_id
 
+    @log_request_id
     def delete(self, metadata):
         """
         Deletes AMI images and snapshot for given metadata.

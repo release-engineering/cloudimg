@@ -1,6 +1,7 @@
 from copy import deepcopy
 from tempfile import NamedTemporaryFile
 import unittest
+import pytest
 
 from unittest.mock import ANY, MagicMock, patch
 
@@ -1081,6 +1082,46 @@ class TestAWSService(unittest.TestCase):
         image = self.svc.tag_image(fake_image, tags)
         assert image.dry_run is False
         assert image.tags == tag_resp
+
+    @patch('cloudimg.aws.AWSService.upload_to_container')
+    @patch('cloudimg.aws.AWSService.import_snapshot')
+    @patch('cloudimg.aws.AWSService.register_image')
+    @patch('cloudimg.aws.AWSService.share_image')
+    @patch('cloudimg.aws.AWSService.get_image_by_name')
+    @patch('cloudimg.aws.AWSService.get_snapshot_by_name')
+    @patch('cloudimg.aws.AWSService.get_object_by_name')
+    def test_log_request_id_decorator(self,
+                                      get_object_by_name,
+                                      get_snapshot_by_name,
+                                      get_image_by_name,
+                                      share_image,
+                                      register_image,
+                                      import_snapshot,
+                                      upload_to_container):
+        """
+        When a botocore.exceptions.ClientError is raised (and the response
+        from AWS contains a RequestId), ensure that the log_request_id
+        decorator logs the AWS RequestId.
+        """
+        get_image_by_name.return_value = None
+        get_snapshot_by_name.return_value = None
+        get_object_by_name.return_value = None
+        upload_to_container.side_effect = ClientError(
+            {
+                'Error': {'Code': '400'},
+                'ResponseMetadata': {
+                    'RequestId': '1234567890ABCDEF',
+                    'HTTPStatusCode': 400,
+                }
+
+            },
+            'test-operation'
+        )
+
+        with self.assertLogs(level='INFO') as log:
+            with pytest.raises(ClientError):
+                self.svc.publish(self.md)
+            assert "AWS RequestId: 1234567890ABCDEF" in log.output[-1]
 
 
 if __name__ == '__main__':
