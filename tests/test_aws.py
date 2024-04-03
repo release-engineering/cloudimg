@@ -75,6 +75,8 @@ class TestAWSService(unittest.TestCase):
             patch.object(ec2_client, 'import_snapshot').start()
         self.mock_describe_import_snapshot_tasks = \
             patch.object(ec2_client, 'describe_import_snapshot_tasks').start()
+        self.mock_copy_ami = \
+            patch.object(ec2_client, 'copy_image').start()
         self.mock_upload_fileobj = \
             patch.object(s3_client, 'upload_fileobj').start()
         self.mock_head_bucket = patch.object(s3_client, 'head_bucket').start()
@@ -160,6 +162,26 @@ class TestAWSService(unittest.TestCase):
         self.mock_describe_images.return_value = {'Images': []}
         img = self.svc.get_image_by_id('abc123')
         self.assertEqual(img, None)
+
+    def test_get_image_from_ami_catalog(self):
+        self.mock_describe_images.return_value = {
+            'Images': [{
+                'ImageId': "ami-catalog-001"
+            }]
+        }
+        img = self.svc.get_image_by_id('ami-catalog-001')
+        self.assertEqual(img.id, 'ami-catalog-001')
+        self.assertNotEqual(img, None)
+
+    def test_get_image_from_ami_catalog_no_exits(self):
+        self.mock_describe_images.return_value = {
+            'Images': [{
+                'ImageId': "ami-catalog-001"
+            }]
+        }
+        img = self.svc.get_image_from_ami_catalog('ami-catalog-001')
+        self.assertEqual(img.id, 'ami-catalog-001')
+        self.assertNotEqual(img, None)
 
     def test_get_snapshot_by_name(self):
         self.mock_describe_snapshots.return_value = {
@@ -338,6 +360,16 @@ class TestAWSService(unittest.TestCase):
         self.assertEqual(self.mock_upload_file.call_count, 1)
         self.assertEqual(self.mock_upload_fileobj.call_count, 0)
         self.assertEqual(obj, result)
+
+    def test_copy_ami(self):
+        self.mock_copy_ami.return_value = {
+            'ImageId': 'ami-08',
+            'ResponseMetadata': {'RequestId': 'cf32',  'server': 'AmazonEC2'}}
+        copy_ami_result = self.svc.copy_ami("ami-01", "rhcos", "us-east-1")
+        self.assertEqual(copy_ami_result['ImageId'], "ami-08")
+        self.mock_copy_ami.assert_called_once_with(
+            SourceImageId='ami-01', Name='rhcos', SourceRegion='us-east-1'
+        )
 
     def test_share_image(self):
         accounts = ['account1', 'account2']
