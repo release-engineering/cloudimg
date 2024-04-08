@@ -240,6 +240,32 @@ class AWSService(BaseService):
 
         return self.ec2.Image(images[0]['ImageId'])
 
+    def get_image_from_ami_catalog(self, image_id):
+        """
+        Finds Image in AMI Catalog with given image id.
+        The search includes AMIs owned by self, AWS marketplace AMIs,
+        and Community AMIs.
+
+        Args:
+            id(str): Image ID of AMI.
+
+        Returns:
+            An EC2 Image if found; None other wise.
+        """
+
+        filters = [{
+            "Name": "image-id",
+            "Values": [image_id],
+        }]
+        rsp = self.ec2.meta.client.describe_images(Filters=filters)
+
+        images = rsp["Images"]
+
+        if not images:
+            return None
+
+        return self.ec2.Image(images[0]["ImageId"])
+
     def get_image_by_name(self, name):
         """
         Finds an image with a given name.
@@ -631,6 +657,25 @@ class AWSService(BaseService):
         self.tag_snapshot(snapshot, tags)
 
         return snapshot
+
+    def copy_ami(self, image_id, image_name, image_region,):
+        """
+        Create copy of an AMI.
+
+        Args:
+            image_id (str): AMI Id of the image to copy
+            name (str): Name of new image
+            region(str): Region for new Image.
+
+        Returns:
+            Dict with Image_id of the newly created AMI and requests_id
+        """
+        resp = self.ec2.meta.client.copy_image(
+            SourceImageId=image_id,
+            Name=image_name,
+            SourceRegion=image_region,
+            )
+        return resp
 
     def wait_for_import_snapshot_task(self, task, attempts=480, interval=15):
         """
