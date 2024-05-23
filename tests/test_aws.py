@@ -363,13 +363,32 @@ class TestAWSService(unittest.TestCase):
 
     def test_copy_ami(self):
         self.mock_copy_ami.return_value = {
-            'ImageId': 'ami-08',
-            'ResponseMetadata': {'RequestId': 'cf32',  'server': 'AmazonEC2'}}
-        copy_ami_result = self.svc.copy_ami("ami-01", "rhcos", "us-east-1")
-        self.assertEqual(copy_ami_result['ImageId'], "ami-08")
-        self.mock_copy_ami.assert_called_once_with(
-            SourceImageId='ami-01', Name='rhcos', SourceRegion='us-east-1'
-        )
+            "ImageId": "ami-08",
+            "ResponseMetadata": {"RequestId": "cf32", "server": "AmazonEC2"},
+        }
+        sub_tests_params = [
+            (
+                {"key": "value"},
+                [{"ResourceType": "image",
+                  "Tags": [{"Key": "key", "Value": "value"}]}],
+            ),
+            (None, []),
+        ]
+        for tags, tags_specification in sub_tests_params:
+            with self.subTest(tags=tags,
+                              tags_specification=tags_specification):
+
+                copy_ami_result = self.svc.copy_ami(
+                    "ami-01", "rhcos", "us-east-1", tags
+                )
+                self.assertEqual(copy_ami_result["ImageId"], "ami-08")
+
+                self.mock_copy_ami.assert_called_with(
+                    SourceImageId="ami-01",
+                    Name="rhcos",
+                    SourceRegion="us-east-1",
+                    TagSpecifications=tags_specification,
+                )
 
     def test_share_image(self):
         accounts = ['account1', 'account2']
