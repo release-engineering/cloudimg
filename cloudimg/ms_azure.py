@@ -489,7 +489,10 @@ class AzureService(BaseService):
         if is_image_path_an_url(urlparse(image_path)):
             log.info('Copying %s to container %s', image_path, container_name)
             blob_client.start_copy_from_url(
-                source_url=image_path, metadata={}, incremental_copy=False
+                source_url=image_path,
+                metadata={},
+                incremental_copy=False,
+                tags=tags
             )
             return self._get_blob_copy_status(blob_client)
 

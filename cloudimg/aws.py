@@ -658,7 +658,7 @@ class AWSService(BaseService):
 
         return snapshot
 
-    def copy_ami(self, image_id, image_name, image_region,):
+    def copy_ami(self, image_id, image_name, image_region, tags):
         """
         Create copy of an AMI.
 
@@ -666,14 +666,24 @@ class AWSService(BaseService):
             image_id (str): AMI Id of the image to copy
             name (str): Name of new image
             region(str): Region for new Image.
+            tags(list, optional): Tags to be associated with new ami.
 
         Returns:
             Dict with Image_id of the newly created AMI and requests_id
         """
+        if tags:
+            tag_specifications = [{
+                "ResourceType": "image",
+                "Tags": self._get_tagdict(tags)
+                }]
+        else:
+            tag_specifications = []
+
         resp = self.ec2.meta.client.copy_image(
             SourceImageId=image_id,
             Name=image_name,
             SourceRegion=image_region,
+            TagSpecifications=tag_specifications
             )
         return resp
 

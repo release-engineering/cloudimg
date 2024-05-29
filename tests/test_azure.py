@@ -549,7 +549,8 @@ class TestAzureService(unittest.TestCase):
         mock_blob_client.start_copy_from_url.assert_called_once_with(
             source_url="https://example.com/rhcos-azure.x86_64.vhd",
             metadata={},
-            incremental_copy=False)
+            incremental_copy=False,
+            tags=self.md.tags)
 
         mock_are_tags_present.assert_called_once_with(
             mock_container_client, self.md.tags
@@ -587,7 +588,8 @@ class TestAzureService(unittest.TestCase):
         mock_blob_client.start_copy_from_url.assert_called_once_with(
             source_url="https://example.com/rhcos-azure.x86_64.vhd",
             metadata={},
-            incremental_copy=False)
+            incremental_copy=False,
+            tags=self.md.tags)
 
         mock_are_tags_present.assert_called_once_with(
             mock_container_client, self.md.tags
