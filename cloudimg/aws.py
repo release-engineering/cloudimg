@@ -899,6 +899,27 @@ class AWSService(BaseService):
 
         return image_id
 
+    def delete_image_object(self, s3_object):
+        """
+        Deregisters AMI image from AWS.
+
+        Args:
+            s3_object (Object): The s3 container with the image object
+
+        Returns:
+            S3 object name
+        """
+        s3_object_name = s3_object.key
+        logging.info("Deleting image in s3 %s (%s)",
+                     s3_object.key, s3_object.bucket_name)
+
+        s3_object.delete()
+
+        logging.debug("Deleted image in s3 %s (%s)",
+                      s3_object.key, s3_object.bucket_name)
+
+        return s3_object_name
+
     def delete_snapshot(self, snapshot):
         """
         Deletes snapshot from AWS.
@@ -930,7 +951,7 @@ class AWSService(BaseService):
             metadata (AWSDeleteMetadata): Metadata about the image
 
         Returns:
-            tuple (image_id[Str], snapshot_id[Str]]) of removed objects.
+            tuple (image_id[Str], snapshot_id[Str]) of removed objects.
         """
         deleted_image_id = None
         deleted_snapshot_id = None
@@ -954,7 +975,7 @@ class AWSService(BaseService):
             snapshot = self.get_snapshot_by_id(snapshot_id)
             deleted_image_id = self.deregister_image(image)
 
-        # image doesn't exist, let's try to find snapshot
+        # image doesn't exist, let's try to find snapshot and object
         # by other provided metadata
         else:
             log.info('Image does not exist: %s', metadata.image_id)
@@ -972,6 +993,19 @@ class AWSService(BaseService):
                          "skip_snapshot is set to True", snapshot.id)
             else:
                 deleted_snapshot_id = self.delete_snapshot(snapshot)
+
+        # If container is specified lets try to find if there's an object
+        # tied to the image and delete it
+        if metadata.container:
+            log.info('Search for %s in %s',
+                     metadata.object_name, metadata.container)
+            s3_object = self.get_object_by_name(metadata.container,
+                                                metadata.object_name)
+            if s3_object:
+                self.delete_image_object(s3_object)
+            else:
+                log.info('Image object (%s) does not exist',
+                         metadata.object_name)
 
         return deleted_image_id, deleted_snapshot_id
 

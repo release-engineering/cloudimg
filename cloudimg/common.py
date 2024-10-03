@@ -73,15 +73,25 @@ class DeleteMetadata(object):
         snapshot_name (str, optional): The name of the snapshot.
         skip_snapshot (bool, optional): If true, deletion of snapshot is
                                         skipped. Default=False.
+        container (str, optional): Container that the s3 object was
+                                        uploaded to.
+        image_path (str, optional): Path to object originally uploaded.
     """
     def __init__(self, image_id, image_name=None, snapshot_id=None,
-                 snapshot_name=None, skip_snapshot=False):
+                 snapshot_name=None, skip_snapshot=False,
+                 container=None, image_path=""):
 
         self.image_id = image_id
         self.image_name = image_name
         self.snapshot_id = snapshot_id
         self.snapshot_name = snapshot_name
         self.skip_snapshot = skip_snapshot
+        self.container = container
+        self.image_path = image_path
+
+    @property
+    def object_name(self):
+        return os.path.basename(self.image_path).rstrip(".xz")
 
 
 class BaseService(object):
