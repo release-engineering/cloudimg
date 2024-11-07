@@ -541,6 +541,15 @@ class AWSService(BaseService):
 
         return obj
 
+    def _find_image(self, image_name, search_tags):
+        image = self.get_image_by_name(image_name)
+        if not image and search_tags:
+            log.info("Searching for image %s by tags: %s",
+                     image_name,
+                     search_tags)
+            image = self.get_image_by_tags(search_tags)
+        return image
+
     @log_request_id
     def publish(self, metadata):
         """
@@ -559,10 +568,10 @@ class AWSService(BaseService):
             An EC2 Image
         """
         log.info('Searching for image: %s', metadata.image_name)
-        image = (
-            self.get_image_by_name(metadata.image_name) or
-            self.get_image_by_tags(metadata.tags)
-        )
+        search_tags = None
+        if metadata.search_tags:
+            search_tags = metadata.tags
+        image = self._find_image(metadata.image_name, search_tags)
 
         if not image:
             log.info('Image does not exist: %s', metadata.image_name)

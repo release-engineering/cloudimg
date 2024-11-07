@@ -622,6 +622,35 @@ class TestAzureService(unittest.TestCase):
     @patch('cloudimg.ms_azure.AzureService.upload_to_container')
     @patch('cloudimg.ms_azure.AzureService.filter_object_by_tags')
     @patch('cloudimg.ms_azure.AzureService.get_object_by_name')
+    def test_publish_without_search_tags(self,
+                                         mock_get_obj,
+                                         mock_filter_by_tags,
+                                         mock_upload):
+        mock_blob = MagicMock()
+        mock_blob.get_blob_properties.return_value = "props"
+        mock_get_obj.return_value = None
+        mock_filter_by_tags.return_value = None
+        mock_upload.return_value = mock_blob
+        self.md.search_tags = False
+
+        res = self.svc.publish(self.md)
+
+        mock_filter_by_tags.assert_not_called()
+        mock_get_obj.assert_called_once_with(
+            container=self.md.container,
+            name=self.md.object_name,
+        )
+        mock_upload.assert_called_once_with(
+            image_path=self.md.image_path,
+            container_name=self.md.container,
+            object_name=self.md.object_name,
+            tags=self.md.tags,
+        )
+        self.assertEqual(res, "props")
+
+    @patch('cloudimg.ms_azure.AzureService.upload_to_container')
+    @patch('cloudimg.ms_azure.AzureService.filter_object_by_tags')
+    @patch('cloudimg.ms_azure.AzureService.get_object_by_name')
     def test_publish_tag_found(self, mock_get_obj, mock_filter_by_tags,
                                mock_upload):
         mock_blob = MagicMock()

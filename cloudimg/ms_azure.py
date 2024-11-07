@@ -540,12 +540,15 @@ class AzureService(BaseService):
 
         if not blob:
             log.info('Image does not exist: %s', metadata.object_name)
-            log.info('Searching for tags: %s', metadata.tags)
-
-            filtered_blob = self.filter_object_by_tags(metadata.tags)
+            filtered_blob = None
+            if metadata.search_tags:
+                log.info('Searching for tags: %s', metadata.tags)
+                filtered_blob = self.filter_object_by_tags(metadata.tags)
 
             if not filtered_blob:
-                log.error("Image not found with tags \"%s\"", metadata.tags)
+                if metadata.search_tags:
+                    log.error("Image not found with tags \"%s\"",
+                              metadata.tags)
                 blob = self.upload_to_container(
                     image_path=metadata.image_path,
                     container_name=metadata.container,
