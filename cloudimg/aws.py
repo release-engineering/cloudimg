@@ -83,6 +83,12 @@ class AWSPublishingMetadata(PublishingMetadata):
         billing_products (list, optional): Billing product identifiers
 
         boot_mode (str, optional): The boot mode for booting up the AMI on EC2.
+
+        snapshot_tags (dict, optional): Tags to be applied to the snapshot
+        import only.
+
+        ami_tags (dict, optional): Tags to be applied to the registered AMI
+        only.
     """
 
     def __init__(self, *args, **kwargs):
@@ -91,6 +97,8 @@ class AWSPublishingMetadata(PublishingMetadata):
         self.billing_products = kwargs.pop('billing_products', None)
         bmode_str = kwargs.pop('boot_mode', None) or "not_set"
         self.boot_mode = AWSBootMode[bmode_str]
+        self.snapshot_tags = kwargs.pop('snapshot_tags', None)
+        self.ami_tags = kwargs.pop('ami_tags', None)
 
         super(AWSPublishingMetadata, self).__init__(*args, **kwargs)
 
@@ -564,6 +572,13 @@ class AWSService(BaseService):
         Returns:
             An EC2 Image
         """
+        def add_tags(tag_parameter_name, extra_kwargs):
+            new_tags = getattr(metadata, tag_parameter_name, None)
+            if new_tags:
+                tags = extra_kwargs.get("tags") or {}
+                new_tags.update(tags)
+                extra_kwargs.update({"tags": new_tags})
+
         log.info('Searching for image: %s', metadata.image_name)
         image = (
             self.get_image_by_name(metadata.image_name) or
@@ -584,8 +599,7 @@ class AWSService(BaseService):
 
                 # Set tags when they're provided
                 extra_kwargs = {}
-                if metadata.tags:
-                    extra_kwargs.update({"tags": metadata.tags})
+                add_tags("tags", extra_kwargs)
 
                 if not obj:
                     log.info('Object does not exist: %s', metadata.object_name)
@@ -596,6 +610,7 @@ class AWSService(BaseService):
                 else:
                     log.info('Object already exists')
 
+                add_tags("snapshot_tags", extra_kwargs)
                 snapshot = self.import_snapshot(obj,
                                                 metadata.snapshot_name,
                                                 **extra_kwargs)
@@ -771,8 +786,10 @@ class AWSService(BaseService):
             BillingProducts=metadata.billing_products,
             **optional_kwargs,
         )
-        if metadata.tags:
-            self.tag_image(image, metadata.tags)
+        if metadata.tags or metadata.ami_tags:
+            tags = metadata.tags or {}
+            tags.update(metadata.ami_tags or {})
+            self.tag_image(image, tags)
         return image
 
     def share_image(self, image, accounts=[], groups=[]):

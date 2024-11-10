@@ -700,6 +700,85 @@ class TestAWSService(unittest.TestCase):
                                                     self.md.object_name,
                                                     tags=tags)
 
+    @patch('cloudimg.aws.AWSService.upload_to_container')
+    @patch('cloudimg.aws.AWSService.import_snapshot')
+    @patch('cloudimg.aws.AWSService.register_image')
+    @patch('cloudimg.aws.AWSService.share_image')
+    @patch('cloudimg.aws.AWSService.get_image_by_tags')
+    @patch('cloudimg.aws.AWSService.get_image_by_name')
+    @patch('cloudimg.aws.AWSService.get_snapshot_by_name')
+    @patch('cloudimg.aws.AWSService.get_object_by_name')
+    def test_publish_snapshot_tags(self,
+                                   get_object_by_name,
+                                   get_snapshot_by_name,
+                                   get_image_by_name,
+                                   get_image_by_tags,
+                                   share_image,
+                                   register_image,
+                                   import_snapshot,
+                                   upload_to_container):
+        get_image_by_name.return_value = None
+        get_image_by_tags.return_value = None
+        get_snapshot_by_name.return_value = None
+        get_object_by_name.return_value = None
+        self.md.tags = None
+        self.md.snapshot_tags = {"snapshot": "tag"}
+        published = self.svc.publish(self.md)
+
+        share_image.assert_called_once_with(published,
+                                            accounts=[],
+                                            groups=[])
+        self.assertEqual(register_image.call_count, 1)
+        import_snapshot.assert_called_once_with(
+            ANY,
+            self.md.snapshot_name,
+            tags={"snapshot": "tag"},
+        )
+        upload_to_container.assert_called_once_with(self.md.image_path,
+                                                    self.md.container,
+                                                    self.md.object_name)
+
+    @patch('cloudimg.aws.AWSService.upload_to_container')
+    @patch('cloudimg.aws.AWSService.import_snapshot')
+    @patch('cloudimg.aws.AWSService.register_image')
+    @patch('cloudimg.aws.AWSService.share_image')
+    @patch('cloudimg.aws.AWSService.get_image_by_tags')
+    @patch('cloudimg.aws.AWSService.get_image_by_name')
+    @patch('cloudimg.aws.AWSService.get_snapshot_by_name')
+    @patch('cloudimg.aws.AWSService.get_object_by_name')
+    def test_publish_merged_snapshot_tags(
+        self,
+        get_object_by_name,
+        get_snapshot_by_name,
+        get_image_by_name,
+        get_image_by_tags,
+        share_image,
+        register_image,
+        import_snapshot,
+        upload_to_container,
+    ):
+        get_image_by_name.return_value = None
+        get_image_by_tags.return_value = None
+        get_snapshot_by_name.return_value = None
+        get_object_by_name.return_value = None
+        self.md.tags = {"foo": "bar"}
+        self.md.snapshot_tags = {"snapshot": "tag"}
+        published = self.svc.publish(self.md)
+
+        share_image.assert_called_once_with(published,
+                                            accounts=[],
+                                            groups=[])
+        self.assertEqual(register_image.call_count, 1)
+        import_snapshot.assert_called_once_with(
+            ANY,
+            self.md.snapshot_name,
+            tags={"foo": "bar", "snapshot": "tag"},
+        )
+        upload_to_container.assert_called_once_with(self.md.image_path,
+                                                    self.md.container,
+                                                    self.md.object_name,
+                                                    tags={"foo": "bar"})
+
     @patch('cloudimg.aws.AWSService.tag_image')
     def test_register_image_no_tags(self, tag_image):
         self.mock_register_image.return_value = "fakeimg"
@@ -739,6 +818,33 @@ class TestAWSService(unittest.TestCase):
 
         self.mock_register_image.assert_called_once()
         tag_image.assert_called_once_with("fakeimg", self.md.tags)
+        self.assertEqual(res, "fakeimg")
+
+    @patch('cloudimg.aws.AWSService.tag_image')
+    def test_register_image_ami_tags(self, tag_image):
+        self.md.tags = None
+        self.md.ami_tags = {"ami": "tag"}
+        self.mock_register_image.return_value = "fakeimg"
+
+        res = self.svc.register_image(MagicMock(), self.md)
+
+        self.mock_register_image.assert_called_once()
+        tag_image.assert_called_once_with("fakeimg", {"ami": "tag"})
+        self.assertEqual(res, "fakeimg")
+
+    @patch('cloudimg.aws.AWSService.tag_image')
+    def test_register_image_merged_ami_tags(self, tag_image):
+        self.md.tags = {"tag": "tag"}
+        self.md.ami_tags = {"ami": "tag"}
+        self.mock_register_image.return_value = "fakeimg"
+
+        res = self.svc.register_image(MagicMock(), self.md)
+
+        self.mock_register_image.assert_called_once()
+        tag_image.assert_called_once_with(
+            "fakeimg",
+            {"tag": "tag", "ami": "tag"},
+        )
         self.assertEqual(res, "fakeimg")
 
     @patch('cloudimg.aws.AWSService.tag_image')
