@@ -237,6 +237,12 @@ class AWSService(BaseService):
 
         if not images:
             return None
+        elif len(images) > 1:
+            amis = [x['ImageId'] for x in images]
+            log.warning(
+                "Filtered more than one image: %s",
+                ", ".join(amis),
+            )
 
         return self.ec2.Image(images[0]['ImageId'])
 
