@@ -941,6 +941,7 @@ class TestAWSService(unittest.TestCase):
         snapshot.delete.assert_called_once()
         assert out
 
+    @patch('cloudimg.aws.AWSService.get_object_by_name')
     @patch('cloudimg.aws.AWSService.get_image_by_id')
     @patch('cloudimg.aws.AWSService.get_snapshot_by_id')
     @patch('cloudimg.aws.AWSService.get_image_by_name')
@@ -949,7 +950,8 @@ class TestAWSService(unittest.TestCase):
                                  get_snapshot_by_name,
                                  get_image_by_name,
                                  get_snapshot_by_id,
-                                 get_image_by_id):
+                                 get_image_by_id,
+                                 get_object_by_name):
         """
         Tests basic scenario of image deletion when image_id is
         the only provided metadata and snapshot id are extrcted from image.
@@ -982,6 +984,66 @@ class TestAWSService(unittest.TestCase):
         # check snapshot related calls
         get_snapshot_by_id.assert_called_once_with(snapshot_id)
         get_snapshot_by_name.assert_not_called()
+
+        # check object related calls
+        get_object_by_name.assert_not_called()
+
+        assert deleted_image_id == image_id
+        assert deleted_snapshot_id == snapshot_id
+
+    @patch('cloudimg.aws.AWSService.get_object_by_name')
+    @patch('cloudimg.aws.AWSService.get_image_by_id')
+    @patch('cloudimg.aws.AWSService.get_snapshot_by_id')
+    @patch('cloudimg.aws.AWSService.get_image_by_name')
+    @patch('cloudimg.aws.AWSService.get_snapshot_by_name')
+    def test_delete_image_exists_delete_object(self,
+                                               get_snapshot_by_name,
+                                               get_image_by_name,
+                                               get_snapshot_by_id,
+                                               get_image_by_id,
+                                               get_object_by_name,):
+        """
+        Tests basic scenario of image deletion when image_id is
+        the only provided metadata and snapshot id are extrcted from image.
+        """
+        # setup testing data
+        image_id = "fake_image_id"
+        snapshot_id = "fake_snapshot_id"
+
+        delete_meta = AWSDeleteMetadata(
+            image_id=image_id,
+            container="test-container",
+            image_path="/some/fake/path/to/test.raw.xz"
+        )
+
+        image = MagicMock()
+        image.id = image_id
+        image.block_device_mappings = [{"Ebs": {"SnapshotId": snapshot_id}}]
+
+        snapshot = MagicMock()
+        snapshot.id = snapshot_id
+
+        image_object = MagicMock()
+        image_object.key = "test.raw"
+
+        get_image_by_id.return_value = image
+        get_snapshot_by_id.return_value = snapshot
+        get_object_by_name.return_value = image_object
+
+        # run delete
+        deleted_image_id, deleted_snapshot_id = self.svc.delete(delete_meta)
+
+        # check image related calls
+        get_image_by_id.assert_called_once_with(image_id)
+        get_image_by_name.assert_not_called()
+
+        # check snapshot related calls
+        get_snapshot_by_id.assert_called_once_with(snapshot_id)
+        get_snapshot_by_name.assert_not_called()
+
+        # check object related calls
+        get_object_by_name.assert_called_once_with('test-container',
+                                                   'test.raw')
 
         assert deleted_image_id == image_id
         assert deleted_snapshot_id == snapshot_id

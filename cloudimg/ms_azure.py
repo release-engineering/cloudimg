@@ -137,15 +137,13 @@ class AzurePublishingMetadata(PublishingMetadata):
 class AzureDeleteMetadata(DeleteMetadata):
     """The required information to delete a blob on Azure."""
 
-    def __init__(self, container, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         # Set the image NAME as the ID for Azure as both are redundant
         # for this marketplace.
         if not kwargs.get("image_name"):
             kwargs.update({"image_name": kwargs.get("image_id")})
 
         super(AzureDeleteMetadata, self).__init__(*args, **kwargs)
-
-        self.container = container
 
 
 class AzureService(BaseService):
