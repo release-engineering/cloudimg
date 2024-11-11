@@ -372,6 +372,12 @@ class AWSService(BaseService):
 
         if not snapshots:
             return None
+        elif len(snapshots) > 1:
+            snaps = [x['SnapshotId'] for x in snapshots]
+            log.warning(
+                "Filtered more than one snapshot: %s",
+                ", ".join(snaps),
+            )
 
         return self.ec2.Snapshot(snapshots[0]['SnapshotId'])
 
