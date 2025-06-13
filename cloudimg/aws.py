@@ -487,6 +487,18 @@ class AWSService(BaseService):
 
         return container
 
+    def ensure_container_exists(self, container_name):
+        """
+        Ensures that a container exists in AWS. If it doesn't exist it will
+        try to create it.
+
+        Args:
+            container_name (str): The container to check for
+        """
+        container = self.get_container_by_name(container_name)
+        if not container:
+            container = self.create_container(container_name)
+
     def upload_to_container(self, image_path, container_name, object_name,
                             chunk_size=CHUNK_SIZE, tags=None):
         """
@@ -509,10 +521,7 @@ class AWSService(BaseService):
         log.info('Uploading %s to container %s', image_path, container_name)
         log.info('Uploading %s with name %s', image_path, object_name)
 
-        # Get or create the container
-        container = self.get_container_by_name(container_name)
-        if not container:
-            container = self.create_container(container_name)
+        self.ensure_container_exists(container_name)
 
         if image_path.lower().startswith('http'):
             # Stream the upload from a remote URL
@@ -597,6 +606,7 @@ class AWSService(BaseService):
             snapshot = self.get_snapshot_by_name(metadata.snapshot_name)
 
             if not snapshot:
+                self.ensure_container_exists(metadata.container)
                 log.info('Snapshot does not exist: %s', metadata.snapshot_name)
                 log.info('Searching for object: %s/%s',
                          metadata.container, metadata.object_name)
