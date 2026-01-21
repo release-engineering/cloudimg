@@ -595,9 +595,13 @@ class AWSService(BaseService):
                 extra_kwargs.update({"tags": new_tags})
 
         log.info('Searching for image: %s', metadata.image_name)
+        merged_ami_tags = {
+            **(metadata.tags or {}),
+            **(metadata.ami_tags or {}),
+        }
         image = (
             self.get_image_by_name(metadata.image_name) or
-            self.get_image_by_tags(metadata.tags)
+            self.get_image_by_tags(merged_ami_tags)
         )
 
         if not image:
