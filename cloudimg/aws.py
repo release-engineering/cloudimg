@@ -244,6 +244,7 @@ class AWSService(BaseService):
         images = rsp['Images']
 
         if not images:
+            log.debug("No images returned for the filters %s", filters)
             return None
         elif len(images) > 1:
             amis = [x['ImageId'] for x in images]
@@ -276,6 +277,7 @@ class AWSService(BaseService):
         images = rsp["Images"]
 
         if not images:
+            log.debug("No image with ID %s found.", image_id)
             return None
 
         return self.ec2.Image(images[0]["ImageId"])
@@ -291,6 +293,7 @@ class AWSService(BaseService):
             An EC2 Image if found; None otherwise
         """
         if not name:
+            log.debug("Name not provided to search for the image.")
             return None
 
         filters = [
@@ -313,6 +316,7 @@ class AWSService(BaseService):
             An EC2 Image if found; None otherwise
         """
         if not tags:
+            log.debug("Tags not provided to search for the image.")
             return None
 
         filters = [
@@ -336,6 +340,7 @@ class AWSService(BaseService):
             An EC2 Image if found; None otherwise
         """
         if not image_id:
+            log.debug("Image ID not provided to search for the image.")
             return None
 
         filters = [
@@ -358,6 +363,7 @@ class AWSService(BaseService):
             An EC2 Snapshot if found; None otherwise
         """
         if not name:
+            log.debug("Name not provided to search for the snapshot.")
             return None
 
         rsp = self.ec2.meta.client.describe_snapshots(
@@ -392,6 +398,7 @@ class AWSService(BaseService):
             An EC2 Snapshot if found; None otherwise
         """
         if not snapshot_id:
+            log.debug("ID not provided to search for the snapshot.")
             return None
 
         rsp = self.ec2.meta.client.describe_snapshots(
@@ -405,6 +412,7 @@ class AWSService(BaseService):
         snapshots = rsp['Snapshots']
 
         if not snapshots:
+            log.debug("No snapshot found with ID %s.", snapshot_id)
             return None
 
         return self.ec2.Snapshot(snapshots[0]['SnapshotId'])
