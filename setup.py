@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cloudimg',
-    version='1.15.0',
+    version='1.16.0',
     author='Alex Misstear',
     author_email='amisstea@redhat.com',
     description=('Services for building and releasing products in cloud '
