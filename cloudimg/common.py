@@ -58,7 +58,9 @@ class PublishingMetadata(object):
 
     @property
     def object_name(self):
-        return os.path.basename(self.image_path).rstrip(".xz")
+        basename = os.path.basename(self.image_path)
+        name_no_ext, ext = os.path.splitext(basename)
+        return name_no_ext if ext == ".xz" else basename
 
 
 class DeleteMetadata(object):

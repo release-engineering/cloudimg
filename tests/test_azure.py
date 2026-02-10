@@ -38,6 +38,26 @@ class TestAzurePublishingMetadata(unittest.TestCase):
                           image_name='fakeimagename',
                           container='abcdef')
 
+    def test_object_name_correctly_parsed(self):
+        """
+        Test that ``object_name`` is correctly parsed when compressed with XZ.
+        """
+        test_cases = [
+            {"img": "image.vhd", "expected": "image.vhd"},
+            {"img": "image.vhd.xz", "expected": "image.vhd"},
+            {"img": "image.vhd.zzz", "expected": "image.vhd.zzz"},
+            {"img": "image.vhd.zzz.xz", "expected": "image.vhd.zzz"},
+            {"img": "image.vhd.xz.backup", "expected": "image.vhd.xz.backup"},
+        ]
+        for tc in test_cases:
+            md = AzurePublishingMetadata(
+                image_path=tc["img"],
+                image_name=tc["img"],
+                container="abcdef",
+                tags={'foo': 'bar'},
+            )
+            self.assertEqual(md.object_name, tc["expected"])
+
 
 class TestAzureService(unittest.TestCase):
 
