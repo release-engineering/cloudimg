@@ -44,6 +44,26 @@ class TestAWSPublishingMetadata(unittest.TestCase):
 
         self.assertEqual(metadata.snapshot_name, 'mysnapshot')
 
+    def test_object_name_correctly_parsed(self):
+        """
+        Test that ``object_name`` is correctly parsed when compressed with XZ.
+        """
+        test_cases = [
+            {"img": "image.raw", "expected": "image.raw"},
+            {"img": "image.raw.xz", "expected": "image.raw"},
+            {"img": "image.raw.zzz", "expected": "image.raw.zzz"},
+            {"img": "image.raw.zzz.xz", "expected": "image.raw.zzz"},
+            {"img": "image.raw.xz.backup", "expected": "image.raw.xz.backup"},
+        ]
+        for tc in test_cases:
+            md = AWSPublishingMetadata(
+                image_path=tc["img"],
+                image_name=tc["img"],
+                container="abcdef",
+                tags={'foo': 'bar'},
+            )
+            self.assertEqual(md.object_name, tc["expected"])
+
 
 class TestAWSService(unittest.TestCase):
 
